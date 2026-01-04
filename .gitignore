@@ -32,8 +32,10 @@ yarn-error.*
 
 # local env files
 .env
-.env.*
-.env*.local
+.env.local
+.env.development
+.env.production
+!.env.example
 
 # secrets & credentials
 *.secret
