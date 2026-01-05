@@ -1,19 +1,17 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
 
 import { colors } from '@/constants/colors';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 
 export {
   ErrorBoundary,
 } from 'expo-router';
-
-export const unstable_settings = {
-  initialRouteName: '(main)',
-};
 
 SplashScreen.preventAutoHideAsync();
 
@@ -37,25 +35,32 @@ export default function RootLayout() {
     return null;
   }
 
-  return <RootLayoutNav />;
+  return (
+    <AuthProvider>
+      <RootLayoutNav />
+    </AuthProvider>
+  );
 }
 
 function RootLayoutNav() {
-  // TODO: Add auth state check here
-  const isAuthenticated = true; // Placeholder - will implement with Supabase
+  const { loading } = useAuth();
 
-  return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
-      {isAuthenticated ? (
-        <Stack.Screen name="(main)" />
-      ) : (
-        <Stack.Screen name="(auth)" />
-      )}
-    </Stack>
-  );
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.mint} />
+      </View>
+    );
+  }
+
+  return <Slot />;
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+});
