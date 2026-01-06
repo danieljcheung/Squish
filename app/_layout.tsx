@@ -12,7 +12,8 @@ export {
   ErrorBoundary,
 } from 'expo-router';
 
-SplashScreen.preventAutoHideAsync();
+// Prevent auto-hide, but catch errors for web/dev environments
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -26,7 +27,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loaded) {
-      SplashScreen.hideAsync();
+      // Hide splash screen, catch errors for web/dev environments
+      SplashScreen.hideAsync().catch(() => {});
     }
   }, [loaded]);
 

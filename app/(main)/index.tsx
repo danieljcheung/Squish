@@ -12,39 +12,20 @@ import { colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { useAgents } from '@/hooks/useAgent';
 import { Agent } from '@/types';
+import { BaseSlime, CoachSlime } from '@/components/slime';
 
-// Placeholder slime graphics for different agent types
+// Slime avatar component that picks the right slime type
 const SlimeAvatar = ({ type, size = 60 }: { type: string; size?: number }) => {
-  const getSlimeColor = () => {
-    switch (type) {
-      case 'fitness':
-        return colors.slimeCoach;
-      case 'budget':
-        return colors.slimeBudget;
-      case 'study':
-        return colors.slimeStudy;
-      default:
-        return colors.slimeBase;
-    }
-  };
-
-  return (
-    <View
-      style={[
-        styles.slimeAvatar,
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: getSlimeColor(),
-        },
-      ]}
-    >
-      <Text style={{ fontSize: size * 0.5 }}>
-        {type === 'fitness' ? '💪' : type === 'budget' ? '💰' : type === 'study' ? '📚' : '🫧'}
-      </Text>
-    </View>
-  );
+  switch (type) {
+    case 'fitness':
+      return <CoachSlime size={size} expression="motivated" />;
+    case 'budget':
+      return <BaseSlime size={size} color={colors.slimeBudget} expression="happy" />;
+    case 'study':
+      return <BaseSlime size={size} color={colors.slimeStudy} expression="neutral" />;
+    default:
+      return <BaseSlime size={size} expression="happy" />;
+  }
 };
 
 // Agent card component
@@ -73,22 +54,22 @@ const AgentCard = ({ agent }: { agent: Agent }) => {
 // Empty state component
 const EmptyState = () => (
   <View style={styles.emptyState}>
-    <Text style={styles.emptySlime}>🫧</Text>
+    <BaseSlime size={120} expression="excited" />
     <Text style={styles.emptyTitle}>No agents yet!</Text>
     <Text style={styles.emptySubtitle}>
       Create your first AI coaching companion{'\n'}to get started on your goals
     </Text>
     <View style={styles.emptyHints}>
       <View style={styles.hintRow}>
-        <Text style={styles.hintEmoji}>💪</Text>
+        <CoachSlime size={40} expression="happy" />
         <Text style={styles.hintText}>Fitness Coach</Text>
       </View>
       <View style={styles.hintRow}>
-        <Text style={styles.hintEmoji}>💰</Text>
+        <BaseSlime size={40} color={colors.slimeBudget} expression="happy" />
         <Text style={styles.hintText}>Budget Buddy</Text>
       </View>
       <View style={styles.hintRow}>
-        <Text style={styles.hintEmoji}>📚</Text>
+        <BaseSlime size={40} color={colors.slimeStudy} expression="neutral" />
         <Text style={styles.hintText}>Study Partner</Text>
       </View>
     </View>
@@ -110,13 +91,16 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.logo}>🫧 Squish</Text>
-          {user && (
-            <Text style={styles.email} numberOfLines={1}>
-              {user.email}
-            </Text>
-          )}
+        <View style={styles.headerLeft}>
+          <BaseSlime size={44} expression="happy" />
+          <View style={styles.headerText}>
+            <Text style={styles.logo}>Squish</Text>
+            {user && (
+              <Text style={styles.email} numberOfLines={1}>
+                {user.email}
+              </Text>
+            )}
+          </View>
         </View>
         <Pressable onPress={signOut} style={styles.signOutBtn}>
           <Text style={styles.signOutText}>Sign Out</Text>
@@ -174,16 +158,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.mint,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerText: {
+    marginLeft: 12,
+  },
   logo: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: colors.text,
   },
   email: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textLight,
     marginTop: 2,
-    maxWidth: 200,
+    maxWidth: 180,
   },
   signOutBtn: {
     paddingVertical: 8,
@@ -210,11 +201,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     paddingTop: 40,
   },
-  emptySlime: {
-    fontSize: 80,
-    marginBottom: 16,
-  },
   emptyTitle: {
+    marginTop: 16,
     fontSize: 24,
     fontWeight: 'bold',
     color: colors.text,
@@ -236,17 +224,14 @@ const styles = StyleSheet.create({
   hintRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.background,
-  },
-  hintEmoji: {
-    fontSize: 24,
-    marginRight: 16,
   },
   hintText: {
     fontSize: 16,
     color: colors.text,
+    marginLeft: 12,
   },
   // Agents list styles
   agentsList: {
@@ -270,10 +255,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
-  },
-  slimeAvatar: {
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   agentInfo: {
     flex: 1,

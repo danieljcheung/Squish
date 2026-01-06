@@ -19,7 +19,7 @@ export default function MainLayout() {
       <Stack.Screen
         name="chat/[id]"
         options={{
-          title: 'Chat',
+          headerShown: false,
         }}
       />
       <Stack.Screen
