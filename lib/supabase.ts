@@ -1,16 +1,40 @@
-import 'react-native-url-polyfill/dist/setup';
+import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import * as Linking from 'expo-linking';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
+// Custom storage adapter that handles SSR
+const ExpoSecureStorage = {
+  getItem: async (key: string) => {
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
+      return null; // SSR - return null
+    }
+    return AsyncStorage.getItem(key);
+  },
+  setItem: async (key: string, value: string) => {
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
+      return; // SSR - no-op
+    }
+    return AsyncStorage.setItem(key, value);
+  },
+  removeItem: async (key: string) => {
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
+      return; // SSR - no-op
+    }
+    return AsyncStorage.removeItem(key);
+  },
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: AsyncStorage,
+    storage: ExpoSecureStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: Platform.OS === 'web', // Enable for web to handle magic link redirects
   },
 });
 
@@ -37,10 +61,27 @@ export interface MessageInsert {
 
 // Auth functions
 export const signInWithEmail = async (email: string) => {
+  // For development with Expo Go, we use localhost which will then redirect
+  // For production, use the app's custom scheme
+  let redirectUrl: string;
+
+  if (Platform.OS === 'web') {
+    redirectUrl = window.location.origin;
+  } else if (__DEV__) {
+    // In development, use localhost - the tokens will be in the URL
+    // We'll handle them when the user manually returns to the app
+    redirectUrl = 'http://localhost:8081';
+  } else {
+    // Production: use custom scheme
+    redirectUrl = 'squish://auth/callback';
+  }
+
+  console.log('Magic link redirect URL:', redirectUrl);
+
   const { data, error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: 'squish://auth/callback',
+      emailRedirectTo: redirectUrl,
     },
   });
   return { data, error };

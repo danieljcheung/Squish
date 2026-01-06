@@ -4,7 +4,6 @@ import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import 'react-native-reanimated';
 
 import { colors } from '@/constants/colors';
 import { AuthProvider, useAuth } from '@/context/AuthContext';

@@ -13,8 +13,7 @@ export default function MainLayout() {
       <Stack.Screen
         name="index"
         options={{
-          title: 'Squish',
-          headerShown: true,
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -26,7 +25,7 @@ export default function MainLayout() {
       <Stack.Screen
         name="create/index"
         options={{
-          title: 'Create Agent',
+          headerShown: false,
           presentation: 'modal',
         }}
       />
