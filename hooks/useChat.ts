@@ -1,63 +1,128 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
-import { sendMessage } from '@/lib/claude';
-import { Message, Agent, AgentMemory } from '@/types';
+import { Message } from '@/types';
+import { getMessages, createMessage } from '@/lib/supabase';
 
-export function useChat(agentId: string) {
+export function useChat(agentId: string | undefined) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // TODO: Fetch messages from Supabase
-    // TODO: Subscribe to realtime updates
-    setLoading(false);
+  // Fetch messages from Supabase
+  const fetchMessages = useCallback(async () => {
+    if (!agentId) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data, error: fetchError } = await getMessages(agentId);
+      if (fetchError) {
+        setError(fetchError.message);
+      } else {
+        setMessages((data as Message[]) || []);
+      }
+    } catch (err) {
+      setError('Failed to fetch messages');
+    } finally {
+      setLoading(false);
+    }
   }, [agentId]);
 
-  const send = useCallback(
-    async (content: string, agent: Agent, memories: AgentMemory[]) => {
-      setSending(true);
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
 
-      // Optimistically add user message
-      const userMessage: Message = {
-        id: `temp-${Date.now()}`,
-        agent_id: agentId,
-        role: 'user',
-        content,
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, userMessage]);
+  // Send a user message and save to Supabase
+  const sendUserMessage = useCallback(
+    async (content: string): Promise<Message | null> => {
+      if (!agentId || !content.trim()) return null;
+
+      setSending(true);
+      setError(null);
 
       try {
-        // TODO: Save user message to Supabase
-        // TODO: Get Claude response
-        // TODO: Extract and save memories
-        // TODO: Save assistant message to Supabase
-
-        const response = await sendMessage(agent, messages, memories, content);
-
-        const assistantMessage: Message = {
-          id: `temp-${Date.now() + 1}`,
+        // Save user message to Supabase
+        const { data, error: saveError } = await createMessage({
           agent_id: agentId,
-          role: 'assistant',
-          content: response,
-          created_at: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
-      } catch (error) {
-        console.error('Failed to send message:', error);
-        // TODO: Handle error, remove optimistic message
+          role: 'user',
+          content: content.trim(),
+        });
+
+        if (saveError) {
+          setError(saveError.message);
+          return null;
+        }
+
+        const savedMessage = data as Message;
+        setMessages((prev) => [...prev, savedMessage]);
+        return savedMessage;
+      } catch (err) {
+        setError('Failed to send message');
+        return null;
       } finally {
         setSending(false);
       }
     },
-    [agentId, messages]
+    [agentId]
   );
+
+  // Save an assistant message to Supabase
+  const saveAssistantMessage = useCallback(
+    async (content: string): Promise<Message | null> => {
+      if (!agentId || !content.trim()) return null;
+
+      try {
+        const { data, error: saveError } = await createMessage({
+          agent_id: agentId,
+          role: 'assistant',
+          content: content.trim(),
+        });
+
+        if (saveError) {
+          setError(saveError.message);
+          return null;
+        }
+
+        const savedMessage = data as Message;
+        setMessages((prev) => [...prev, savedMessage]);
+        return savedMessage;
+      } catch (err) {
+        setError('Failed to save assistant message');
+        return null;
+      }
+    },
+    [agentId]
+  );
+
+  // Add a message locally (for optimistic updates)
+  const addLocalMessage = useCallback((message: Omit<Message, 'id' | 'created_at'>) => {
+    const localMessage: Message = {
+      ...message,
+      id: `local-${Date.now()}`,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, localMessage]);
+    return localMessage;
+  }, []);
+
+  // Clear all messages locally
+  const clearMessages = useCallback(() => {
+    setMessages([]);
+  }, []);
 
   return {
     messages,
     loading,
     sending,
-    send,
+    error,
+    sendUserMessage,
+    saveAssistantMessage,
+    addLocalMessage,
+    clearMessages,
+    refetch: fetchMessages,
   };
 }

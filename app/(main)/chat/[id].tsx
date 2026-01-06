@@ -8,17 +8,22 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { colors } from '@/constants/colors';
 import { useAgent } from '@/hooks/useAgent';
+import { useChat } from '@/hooks/useChat';
+import { useAgentMemory } from '@/hooks/useAgentMemory';
 import { BaseSlime, CoachSlime } from '@/components/slime';
+import { Message } from '@/types';
+import { sendMessage as sendToClaudeAPI, generateGreeting } from '@/lib/claude';
 
 // Get the right slime component based on agent type
-const AgentSlime = ({ type, size = 40 }: { type?: string; size?: number }) => {
+const AgentSlime = ({ type, size = 40, expression = 'motivated' }: { type?: string; size?: number; expression?: string }) => {
   switch (type) {
     case 'fitness':
-      return <CoachSlime size={size} expression="motivated" />;
+      return <CoachSlime size={size} expression={expression as any} />;
     case 'budget':
       return <BaseSlime size={size} color={colors.slimeBudget} expression="happy" />;
     case 'study':
@@ -30,83 +35,131 @@ const AgentSlime = ({ type, size = 40 }: { type?: string; size?: number }) => {
 
 // Chat message bubble
 const MessageBubble = ({
-  content,
-  isUser,
+  message,
   agentType,
 }: {
-  content: string;
-  isUser: boolean;
+  message: Message;
   agentType?: string;
-}) => (
-  <View
-    style={[
-      styles.messageContainer,
-      isUser ? styles.userMessageContainer : styles.agentMessageContainer,
-    ]}
-  >
-    {!isUser && (
-      <View style={styles.avatarSmall}>
-        <AgentSlime type={agentType} size={32} />
+}) => {
+  const isUser = message.role === 'user';
+
+  return (
+    <View
+      style={[
+        styles.messageContainer,
+        isUser ? styles.userMessageContainer : styles.agentMessageContainer,
+      ]}
+    >
+      {!isUser && (
+        <View style={styles.avatarSmall}>
+          <AgentSlime type={agentType} size={32} expression="happy" />
+        </View>
+      )}
+      <View style={[styles.bubble, isUser ? styles.userBubble : styles.agentBubble]}>
+        <Text style={styles.bubbleText}>{message.content}</Text>
+        <Text style={styles.timestamp}>
+          {new Date(message.created_at).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </Text>
       </View>
-    )}
-    <View style={[styles.bubble, isUser ? styles.userBubble : styles.agentBubble]}>
-      <Text style={styles.bubbleText}>{content}</Text>
+    </View>
+  );
+};
+
+// Typing indicator
+const TypingIndicator = ({ agentType }: { agentType?: string }) => (
+  <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+    <View style={styles.avatarSmall}>
+      <AgentSlime type={agentType} size={32} expression="thinking" />
+    </View>
+    <View style={[styles.bubble, styles.agentBubble, styles.typingBubble]}>
+      <View style={styles.typingDots}>
+        <View style={[styles.dot, styles.dot1]} />
+        <View style={[styles.dot, styles.dot2]} />
+        <View style={[styles.dot, styles.dot3]} />
+      </View>
     </View>
   </View>
 );
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { agent, loading } = useAgent(id);
+  const { agent, loading: agentLoading } = useAgent(id);
+  const { memories, saveMemories, loading: memoriesLoading } = useAgentMemory(id);
+  const {
+    messages,
+    loading: messagesLoading,
+    sending,
+    sendUserMessage,
+    saveAssistantMessage,
+  } = useChat(id);
+
   const scrollViewRef = useRef<ScrollView>(null);
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Array<{ content: string; isUser: boolean }>>([]);
+  const [inputText, setInputText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
 
-  // Add welcome message when agent loads
+  // Scroll to bottom when messages change
   useEffect(() => {
-    if (agent && messages.length === 0) {
-      const welcomeMessage = agent.type === 'fitness'
-        ? `Hey! I'm ${agent.name}, your fitness coach! Ready to crush some goals today? 💪`
-        : `Hi there! I'm ${agent.name}. How can I help you today?`;
-
-      setMessages([{ content: welcomeMessage, isUser: false }]);
-    }
-  }, [agent]);
-
-  const handleSend = () => {
-    if (!message.trim()) return;
-
-    // Add user message
-    setMessages((prev) => [...prev, { content: message.trim(), isUser: true }]);
-    setMessage('');
-
-    // Scroll to bottom
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
+  }, [messages, isTyping]);
 
-    // Simulate agent response (placeholder)
-    setTimeout(() => {
-      const responses = [
-        "That's great! Let's work on that together.",
-        "I'm here to help! Tell me more.",
-        "Awesome! You're doing amazing! 💪",
-        "Keep pushing! You've got this!",
-      ];
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-      setMessages((prev) => [...prev, { content: randomResponse, isUser: false }]);
+  // Add welcome message if no messages exist
+  useEffect(() => {
+    if (!messagesLoading && messages.length === 0 && agent) {
+      const welcomeMessage = generateGreeting(agent);
+      saveAssistantMessage(welcomeMessage);
+    }
+  }, [messagesLoading, messages.length, agent]);
 
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }, 1000);
+  const handleSend = async () => {
+    if (!inputText.trim() || sending || !agent) return;
+
+    const messageText = inputText.trim();
+    setInputText('');
+
+    // Save user message to Supabase
+    const userMessage = await sendUserMessage(messageText);
+    if (!userMessage) return;
+
+    // Show typing indicator
+    setIsTyping(true);
+
+    try {
+      // Call Claude API with agent context and memories
+      const { response, newMemories } = await sendToClaudeAPI(
+        agent,
+        messages,
+        memories,
+        messageText
+      );
+
+      // Save any new memories extracted from Claude's response
+      if (newMemories.length > 0) {
+        const savedCount = await saveMemories(newMemories);
+        console.log(`Saved ${savedCount} new memories`);
+      }
+
+      // Save assistant response to Supabase
+      await saveAssistantMessage(response);
+    } catch (error) {
+      console.error('Error getting response:', error);
+      await saveAssistantMessage("Oops! I'm having a moment. Let's try that again! 💪");
+    } finally {
+      setIsTyping(false);
+    }
   };
+
+  const loading = agentLoading || messagesLoading || memoriesLoading;
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <BaseSlime size={80} expression="sleepy" />
-        <Text style={styles.loadingText}>Loading...</Text>
+        <Text style={styles.loadingText}>Loading chat...</Text>
       </View>
     );
   }
@@ -115,20 +168,25 @@ export default function ChatScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={90}
+      keyboardVerticalOffset={0}
     >
       {/* Custom Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backButtonText}>‹</Text>
         </Pressable>
-        <View style={styles.headerCenter}>
-          <AgentSlime type={agent?.type} size={36} />
+        <Pressable
+          style={styles.headerCenter}
+          onPress={() => router.push(`/settings/${id}`)}
+        >
+          <AgentSlime type={agent?.type} size={40} expression="motivated" />
           <View style={styles.headerInfo}>
             <Text style={styles.headerName}>{agent?.name || 'Agent'}</Text>
-            <Text style={styles.headerStatus}>Online</Text>
+            <Text style={styles.headerStatus}>
+              {isTyping ? 'Typing...' : 'Online'}
+            </Text>
           </View>
-        </View>
+        </Pressable>
         <Pressable
           onPress={() => router.push(`/settings/${id}`)}
           style={styles.settingsButton}
@@ -142,35 +200,44 @@ export default function ChatScreen() {
         ref={scrollViewRef}
         style={styles.messagesContainer}
         contentContainerStyle={styles.messagesContent}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
+        keyboardShouldPersistTaps="handled"
       >
-        {messages.map((msg, index) => (
+        {messages.map((msg) => (
           <MessageBubble
-            key={index}
-            content={msg.content}
-            isUser={msg.isUser}
+            key={msg.id}
+            message={msg}
             agentType={agent?.type}
           />
         ))}
+        {isTyping && <TypingIndicator agentType={agent?.type} />}
       </ScrollView>
 
       {/* Input */}
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
-          value={message}
-          onChangeText={setMessage}
+          value={inputText}
+          onChangeText={setInputText}
           placeholder="Type a message..."
           placeholderTextColor={colors.textLight}
           onSubmitEditing={handleSend}
           returnKeyType="send"
+          multiline
+          maxLength={1000}
         />
         <Pressable
-          style={[styles.sendButton, !message.trim() && styles.sendButtonDisabled]}
+          style={[
+            styles.sendButton,
+            (!inputText.trim() || sending) && styles.sendButtonDisabled
+          ]}
           onPress={handleSend}
-          disabled={!message.trim()}
+          disabled={!inputText.trim() || sending}
         >
-          <Text style={styles.sendButtonText}>↑</Text>
+          {sending ? (
+            <ActivityIndicator size="small" color={colors.text} />
+          ) : (
+            <Text style={styles.sendButtonText}>↑</Text>
+          )}
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -206,17 +273,17 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.mint,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
   backButtonText: {
-    fontSize: 28,
+    fontSize: 32,
     color: colors.text,
-    marginTop: -2,
+    marginTop: -4,
   },
   headerCenter: {
     flexDirection: 'row',
@@ -225,28 +292,28 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   headerInfo: {
-    marginLeft: 10,
+    marginLeft: 12,
   },
   headerName: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.text,
   },
   headerStatus: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.mint,
-    marginTop: 1,
+    marginTop: 2,
   },
   settingsButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
   settingsButtonText: {
-    fontSize: 18,
+    fontSize: 20,
     color: colors.textLight,
   },
   // Messages
@@ -291,10 +358,42 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 22,
   },
+  timestamp: {
+    fontSize: 11,
+    color: colors.textLight,
+    marginTop: 4,
+    alignSelf: 'flex-end',
+  },
+  // Typing indicator
+  typingBubble: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  typingDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.textLight,
+    marginHorizontal: 2,
+    opacity: 0.4,
+  },
+  dot1: {
+    opacity: 0.4,
+  },
+  dot2: {
+    opacity: 0.6,
+  },
+  dot3: {
+    opacity: 0.8,
+  },
   // Input
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     padding: 16,
     paddingBottom: 32,
     backgroundColor: colors.surface,
@@ -307,15 +406,17 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 20,
     paddingVertical: 12,
+    paddingTop: 12,
     fontSize: 16,
     color: colors.text,
     borderWidth: 2,
     borderColor: colors.mint,
+    maxHeight: 120,
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.mint,
     justifyContent: 'center',
     alignItems: 'center',
@@ -325,7 +426,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   sendButtonText: {
-    fontSize: 22,
+    fontSize: 24,
     color: colors.text,
     fontWeight: '600',
   },
