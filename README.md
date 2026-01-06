@@ -137,10 +137,10 @@ agent_memory (id, agent_id, key, value, updated_at)
 
 - [x] Project setup with Expo Router
 - [x] Basic navigation structure
-- [ ] Supabase auth integration
-- [ ] Onboarding interview flow
-- [ ] Chat UI with Claude integration
-- [ ] Push notifications
+- [x] Supabase auth integration
+- [x] Onboarding interview flow
+- [x] Chat UI with Claude integration
+- [x] Push notifications
 - [ ] Slime animations
 - [ ] Additional agent types
 
