@@ -13,7 +13,9 @@ import {
 import { router } from 'expo-router';
 import { colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { createAgent } from '@/lib/supabase';
+import { parseError } from '@/lib/errors';
 
 // Question configuration
 interface Question {
@@ -176,6 +178,7 @@ const OptionButton = ({
 
 export default function CreateAgentScreen() {
   const { user } = useAuth();
+  const { showError, showSuccess } = useToast();
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [responses, setResponses] = useState<Record<string, string>>({});
@@ -260,36 +263,62 @@ export default function CreateAgentScreen() {
       dietaryRestrictions: finalResponses.diet,
     };
 
-    const { data, error } = await createAgent({
-      user_id: user.id,
-      type: 'fitness',
-      name: coachName,
-      persona_json: persona,
-      settings_json: {
-        notifications: true,
-        checkInTime: '09:00',
-      },
-    });
+    try {
+      const { data, error } = await createAgent({
+        user_id: user.id,
+        type: 'fitness',
+        name: coachName,
+        persona_json: persona,
+        settings_json: {
+          notifications_enabled: true,
+          morning_checkin: {
+            enabled: true,
+            time: { hour: 9, minute: 0 },
+          },
+          meal_reminders: false,
+          workout_reminders: {
+            enabled: false,
+            days: [1, 3, 5],
+            time: { hour: 18, minute: 0 },
+          },
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+      });
 
-    if (error) {
+      if (error) {
+        const appError = parseError(error);
+        setChatHistory((prev) => [
+          ...prev,
+          { text: "Oops! Something went wrong. Please try again.", isUser: false },
+        ]);
+        showError(appError, () => createFitnessAgent(finalResponses));
+        setIsCreating(false);
+        setShowOptions(true);
+        return;
+      }
+
+      // Success - show completion message then navigate to home
+      setChatHistory((prev) => [
+        ...prev,
+        { text: `${coachName} is ready! Let's crush your goals together! 💪`, isUser: false },
+      ]);
+      scrollToBottom();
+
+      showSuccess(`${coachName} has been created!`);
+
+      setTimeout(() => {
+        router.replace('/(main)');
+      }, 1500);
+    } catch (err) {
+      const appError = parseError(err);
       setChatHistory((prev) => [
         ...prev,
         { text: "Oops! Something went wrong. Please try again.", isUser: false },
       ]);
+      showError(appError, () => createFitnessAgent(finalResponses));
       setIsCreating(false);
-      return;
+      setShowOptions(true);
     }
-
-    // Success - show completion message then navigate to home
-    setChatHistory((prev) => [
-      ...prev,
-      { text: `${coachName} is ready! Let's crush your goals together! 💪`, isUser: false },
-    ]);
-    scrollToBottom();
-
-    setTimeout(() => {
-      router.replace('/(main)');
-    }, 1500);
   };
 
   return (
@@ -369,7 +398,14 @@ export default function CreateAgentScreen() {
 
       {isCreating && (
         <View style={styles.creatingContainer}>
-          <Text style={styles.creatingText}>Creating your coach...</Text>
+          <View style={styles.creatingContent}>
+            <View style={styles.creatingDots}>
+              <View style={[styles.creatingDot, styles.creatingDot1]} />
+              <View style={[styles.creatingDot, styles.creatingDot2]} />
+              <View style={[styles.creatingDot, styles.creatingDot3]} />
+            </View>
+            <Text style={styles.creatingText}>Creating your coach...</Text>
+          </View>
         </View>
       )}
     </KeyboardAvoidingView>
@@ -555,9 +591,36 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.background,
+  },
+  creatingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  creatingDots: {
+    flexDirection: 'row',
+    marginRight: 12,
+  },
+  creatingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.mint,
+    marginHorizontal: 2,
+  },
+  creatingDot1: {
+    opacity: 1,
+  },
+  creatingDot2: {
+    opacity: 0.6,
+  },
+  creatingDot3: {
+    opacity: 0.3,
   },
   creatingText: {
     fontSize: 16,
     color: colors.textLight,
+    fontWeight: '500',
   },
 });

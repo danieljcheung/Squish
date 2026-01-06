@@ -11,30 +11,60 @@ import {
 } from 'react-native';
 import { colors } from '@/constants/colors';
 import { signInWithEmail } from '@/lib/supabase';
+import { useToast } from '@/context/ToastContext';
+import { parseError, ErrorType } from '@/lib/errors';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { showError } = useToast();
 
   const handleSignIn = async () => {
-    if (!email.trim()) {
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
       setError('Please enter your email');
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setError('Please enter a valid email address');
       return;
     }
 
     setLoading(true);
     setError(null);
 
-    const { error: signInError } = await signInWithEmail(email.trim());
+    try {
+      const { error: signInError } = await signInWithEmail(trimmedEmail);
 
-    setLoading(false);
+      if (signInError) {
+        const appError = parseError(signInError);
 
-    if (signInError) {
-      setError(signInError.message);
-    } else {
-      setSent(true);
+        // Handle rate limiting specifically
+        if (appError.type === ErrorType.RATE_LIMIT) {
+          setError('Too many attempts. Please wait a moment and try again.');
+        } else if (appError.type === ErrorType.NETWORK) {
+          setError("Can't connect. Please check your internet and try again.");
+          showError(appError, handleSignIn);
+        } else {
+          setError(appError.message);
+        }
+      } else {
+        setSent(true);
+      }
+    } catch (err) {
+      const appError = parseError(err);
+      setError(appError.message);
+      if (appError.retryable) {
+        showError(appError, handleSignIn);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -77,16 +107,21 @@ export default function LoginScreen() {
 
         <View style={styles.form}>
           <TextInput
-            style={styles.input}
+            style={[styles.input, error && styles.inputError]}
             placeholder="Enter your email"
             placeholderTextColor={colors.textLight}
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(text) => {
+              setEmail(text);
+              if (error) setError(null);
+            }}
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
             autoCorrect={false}
             editable={!loading}
+            onSubmitEditing={handleSignIn}
+            returnKeyType="go"
           />
 
           {error && <Text style={styles.error}>{error}</Text>}
@@ -151,6 +186,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     borderWidth: 2,
     borderColor: colors.mint,
+  },
+  inputError: {
+    borderColor: '#E74C3C',
   },
   error: {
     color: '#E74C3C',

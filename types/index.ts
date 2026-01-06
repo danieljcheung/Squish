@@ -29,11 +29,35 @@ export interface PersonaJson {
   current_fitness_level?: 'beginner' | 'intermediate' | 'advanced';
 }
 
+export interface NotificationTime {
+  hour: number; // 0-23
+  minute: number; // 0-59
+}
+
+export interface WorkoutReminderSettings {
+  enabled: boolean;
+  days: number[]; // 0=Sunday, 1=Monday, etc.
+  time: NotificationTime;
+}
+
 export interface AgentSettings {
   notifications_enabled: boolean;
-  morning_checkin: boolean;
-  evening_checkin: boolean;
+  morning_checkin: {
+    enabled: boolean;
+    time: NotificationTime;
+  };
   meal_reminders: boolean;
+  workout_reminders: WorkoutReminderSettings;
+  timezone: string; // e.g., "America/New_York"
+}
+
+export interface PushToken {
+  id: string;
+  user_id: string;
+  token: string;
+  platform: 'ios' | 'android' | 'web';
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Message {

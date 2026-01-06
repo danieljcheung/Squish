@@ -9,12 +9,13 @@ import {
   upsertMemory,
 } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { parseError, AppError, ErrorType } from '@/lib/errors';
 
 export function useAgent(agentId: string | undefined) {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [memories, setMemories] = useState<AgentMemory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
 
   const fetchAgent = useCallback(async () => {
     if (!agentId) {
@@ -28,18 +29,22 @@ export function useAgent(agentId: string | undefined) {
     try {
       const { data, error: fetchError } = await getAgent(agentId);
       if (fetchError) {
-        setError(fetchError.message);
-      } else {
-        setAgent(data as Agent);
+        const appError = parseError(fetchError);
+        setError(appError);
+        return;
       }
+      setAgent(data as Agent);
 
       // Also fetch memories
-      const { data: memoriesData } = await getMemories(agentId);
-      if (memoriesData) {
+      const { data: memoriesData, error: memoriesError } = await getMemories(agentId);
+      if (memoriesError) {
+        console.error('Failed to fetch memories:', memoriesError);
+      } else if (memoriesData) {
         setMemories(memoriesData as AgentMemory[]);
       }
     } catch (err) {
-      setError('Failed to fetch agent');
+      const appError = parseError(err);
+      setError(appError);
     } finally {
       setLoading(false);
     }
@@ -49,47 +54,78 @@ export function useAgent(agentId: string | undefined) {
     fetchAgent();
   }, [fetchAgent]);
 
-  const updateAgent = async (updates: Partial<Agent>) => {
-    if (!agentId) return { error: 'No agent ID' };
-
-    const { data, error: updateError } = await updateAgentApi(agentId, {
-      name: updates.name,
-      persona_json: updates.persona_json,
-      settings_json: updates.settings_json,
-    });
-
-    if (!updateError && data) {
-      setAgent(data as Agent);
+  const updateAgent = async (updates: Partial<Agent>): Promise<{ data?: Agent; error?: AppError }> => {
+    if (!agentId) {
+      return { error: { type: ErrorType.VALIDATION, message: 'No agent ID', retryable: false } };
     }
 
-    return { data, error: updateError };
-  };
-
-  const addMemory = async (key: string, value: string) => {
-    if (!agentId) return { error: 'No agent ID' };
-
-    const { data, error: memoryError } = await upsertMemory(agentId, key, value);
-
-    if (!memoryError && data) {
-      setMemories((prev) => {
-        const existing = prev.findIndex((m) => m.key === key);
-        if (existing >= 0) {
-          const updated = [...prev];
-          updated[existing] = data as AgentMemory;
-          return updated;
-        }
-        return [data as AgentMemory, ...prev];
+    try {
+      const { data, error: updateError } = await updateAgentApi(agentId, {
+        name: updates.name,
+        persona_json: updates.persona_json,
+        settings_json: updates.settings_json,
       });
-    }
 
-    return { data, error: memoryError };
+      if (updateError) {
+        return { error: parseError(updateError) };
+      }
+
+      if (data) {
+        setAgent(data as Agent);
+        return { data: data as Agent };
+      }
+
+      return {};
+    } catch (err) {
+      return { error: parseError(err) };
+    }
   };
 
-  const deleteAgent = async () => {
-    if (!agentId) return { error: 'No agent ID' };
+  const addMemory = async (key: string, value: string): Promise<{ data?: AgentMemory; error?: AppError }> => {
+    if (!agentId) {
+      return { error: { type: ErrorType.VALIDATION, message: 'No agent ID', retryable: false } };
+    }
 
-    const { error: deleteError } = await deleteAgentApi(agentId);
-    return { error: deleteError };
+    try {
+      const { data, error: memoryError } = await upsertMemory(agentId, key, value);
+
+      if (memoryError) {
+        return { error: parseError(memoryError) };
+      }
+
+      if (data) {
+        setMemories((prev) => {
+          const existing = prev.findIndex((m) => m.key === key);
+          if (existing >= 0) {
+            const updated = [...prev];
+            updated[existing] = data as AgentMemory;
+            return updated;
+          }
+          return [data as AgentMemory, ...prev];
+        });
+        return { data: data as AgentMemory };
+      }
+
+      return {};
+    } catch (err) {
+      return { error: parseError(err) };
+    }
+  };
+
+  const deleteAgent = async (): Promise<{ error?: AppError }> => {
+    if (!agentId) {
+      return { error: { type: ErrorType.VALIDATION, message: 'No agent ID', retryable: false } };
+    }
+
+    try {
+      const { error: deleteError } = await deleteAgentApi(agentId);
+      if (deleteError) {
+        return { error: parseError(deleteError) };
+      }
+      return {};
+    } catch (err) {
+      return { error: parseError(err) };
+    }
   };
 
   return {
@@ -108,7 +144,7 @@ export function useAgents() {
   const { user } = useAuth();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
 
   const fetchAgents = useCallback(async () => {
     if (!user) {
@@ -123,12 +159,14 @@ export function useAgents() {
     try {
       const { data, error: fetchError } = await getAgents(user.id);
       if (fetchError) {
-        setError(fetchError.message);
-      } else {
-        setAgents((data as Agent[]) || []);
+        const appError = parseError(fetchError);
+        setError(appError);
+        return;
       }
+      setAgents((data as Agent[]) || []);
     } catch (err) {
-      setError('Failed to fetch agents');
+      const appError = parseError(err);
+      setError(appError);
     } finally {
       setLoading(false);
     }

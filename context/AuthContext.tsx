@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase';
 import { useRouter, useSegments } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
+import {
+  registerForPushNotificationsAsync,
+  unregisterPushToken,
+} from '@/lib/notifications';
 
 interface AuthContextType {
   user: User | null;
@@ -122,6 +126,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+
+      // Register for push notifications if user is logged in
+      if (session?.user) {
+        registerForPushNotificationsAsync(session.user.id).catch(console.error);
+      }
     });
 
     // Listen for auth changes
@@ -131,6 +140,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // Register for push notifications on sign in
+        if (event === 'SIGNED_IN' && session?.user) {
+          registerForPushNotificationsAsync(session.user.id).catch(console.error);
+        }
       }
     );
 
@@ -142,6 +156,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useProtectedRoute(user, loading);
 
   const signOut = async () => {
+    // Unregister push token before signing out
+    await unregisterPushToken().catch(console.error);
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);

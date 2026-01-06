@@ -193,3 +193,55 @@ export const upsertMemory = async (
     .single();
   return { data, error };
 };
+
+// Push Tokens
+export const savePushToken = async (
+  userId: string,
+  token: string,
+  platform: 'ios' | 'android' | 'web'
+) => {
+  const { data, error } = await supabase
+    .from('push_tokens')
+    .upsert(
+      {
+        user_id: userId,
+        token,
+        platform,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,token' }
+    )
+    .select()
+    .single();
+  return { data, error };
+};
+
+export const deletePushToken = async (token: string) => {
+  const { error } = await supabase
+    .from('push_tokens')
+    .delete()
+    .eq('token', token);
+  return { error };
+};
+
+export const getPushTokensForUser = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('push_tokens')
+    .select('*')
+    .eq('user_id', userId);
+  return { data, error };
+};
+
+// Agent Settings
+export const updateAgentSettings = async (
+  agentId: string,
+  settings: Record<string, unknown>
+) => {
+  const { data, error } = await supabase
+    .from('agents')
+    .update({ settings_json: settings })
+    .eq('id', agentId)
+    .select()
+    .single();
+  return { data, error };
+};

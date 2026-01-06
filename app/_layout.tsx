@@ -7,6 +7,7 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
 import { colors } from '@/constants/colors';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { ToastProvider } from '@/context/ToastContext';
 
 export {
   ErrorBoundary,
@@ -37,9 +38,11 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <RootLayoutNav />
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 

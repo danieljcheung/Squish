@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,10 @@ import { Link } from 'expo-router';
 import { colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { useAgents } from '@/hooks/useAgent';
+import { useToast } from '@/context/ToastContext';
 import { Agent } from '@/types';
 import { BaseSlime, CoachSlime } from '@/components/slime';
+import { AgentListSkeleton, ErrorState } from '@/components/ui';
 
 // Slime avatar component that picks the right slime type
 const SlimeAvatar = ({ type, size = 60 }: { type: string; size?: number }) => {
@@ -78,8 +80,16 @@ const EmptyState = () => (
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
-  const { agents, loading, refetch } = useAgents();
+  const { agents, loading, error, refetch } = useAgents();
+  const { showError } = useToast();
   const [refreshing, setRefreshing] = useState(false);
+
+  // Show toast when there's an error
+  useEffect(() => {
+    if (error && !loading) {
+      showError(error, refetch);
+    }
+  }, [error, loading]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -110,16 +120,27 @@ export default function HomeScreen() {
       {/* Content */}
       <ScrollView
         style={styles.content}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          (error && !loading) && styles.contentContainerCentered,
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={colors.mint}
+            colors={[colors.mint]}
           />
         }
       >
-        {!loading && agents.length === 0 ? (
+        {loading ? (
+          <AgentListSkeleton count={2} />
+        ) : error ? (
+          <ErrorState
+            message={error.message}
+            onRetry={refetch}
+          />
+        ) : agents.length === 0 ? (
           <EmptyState />
         ) : (
           <View style={styles.agentsList}>
@@ -192,6 +213,9 @@ const styles = StyleSheet.create({
   contentContainer: {
     flexGrow: 1,
     paddingBottom: 100,
+  },
+  contentContainerCentered: {
+    justifyContent: 'center',
   },
   // Empty state styles
   emptyState: {
