@@ -50,6 +50,8 @@ export function useMealLogging(agent: Agent | null): UseMealLoggingReturn {
   // Analyze a meal photo
   const analyzeMeal = useCallback(
     async (photoUrl: string, notes?: string): Promise<PendingMeal | null> => {
+      console.log('useMealLogging.analyzeMeal called with notes:', notes);
+
       if (!agent) {
         setError('No agent selected');
         return null;

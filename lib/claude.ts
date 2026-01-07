@@ -396,20 +396,34 @@ export async function analyzeMealPhoto(
     return null;
   }
 
+  // Log notes for debugging
+  console.log('analyzeMealPhoto called with notes:', notes);
+
   const persona = agent.persona_json as Record<string, any>;
   const dietaryRestrictions = persona.dietaryRestrictions || 'None specified';
 
-  const systemPrompt = `${MEAL_ANALYSIS_PROMPT}
+  // Build system prompt - include notes context if provided
+  let systemPrompt = MEAL_ANALYSIS_PROMPT;
 
-User's dietary restrictions: ${dietaryRestrictions}`;
+  if (notes && notes.trim()) {
+    // Add notes context directly to system prompt for emphasis
+    systemPrompt = `${MEAL_ANALYSIS_PROMPT}
+
+IMPORTANT - USER PROVIDED THESE NOTES: "${notes.trim()}"
+You MUST factor these notes into your calculations. The noteAdjustment field is REQUIRED.`;
+  }
+
+  systemPrompt += `\n\nUser's dietary restrictions: ${dietaryRestrictions}`;
 
   // Build user message with notes if provided
   let userText = 'Please analyze this meal and estimate its nutritional content.';
   if (notes && notes.trim()) {
-    userText = `USER NOTES (READ FIRST AND ADJUST CALCULATIONS): "${notes.trim()}"
+    userText = `IMPORTANT: I'm providing notes about this meal: "${notes.trim()}"
 
-Please analyze this meal and estimate its nutritional content, adjusting for my notes above.`;
+Please analyze this meal photo and adjust your nutritional estimates based on my notes. You MUST include a noteAdjustment field explaining how you adjusted for my notes.`;
   }
+
+  console.log('Sending to Claude with userText:', userText);
 
   try {
     const response = await fetch(API_URL, {
@@ -462,11 +476,14 @@ Please analyze this meal and estimate its nutritional content, adjusting for my 
     let analysis: MealAnalysis;
     try {
       // Try to extract JSON from the response (in case there's extra text)
+      console.log('Claude raw response:', textContent.text);
       const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error('No JSON found in response');
       }
       analysis = JSON.parse(jsonMatch[0]);
+      console.log('Parsed analysis:', JSON.stringify(analysis, null, 2));
+      console.log('noteAdjustment field:', (analysis as any).noteAdjustment);
     } catch (parseError) {
       console.error('Failed to parse meal analysis:', parseError);
       return null;

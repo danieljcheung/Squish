@@ -25,9 +25,10 @@ export function PhotoOptionsSheet({
   const [notes, setNotes] = useState('');
 
   const handleCameraPress = async () => {
-    console.log('PhotoOptionsSheet: Camera button pressed, calling onCamera...');
+    const trimmedNotes = notes.trim() || undefined;
+    console.log('PhotoOptionsSheet: Camera pressed with notes:', trimmedNotes);
     try {
-      await onCamera(notes.trim() || undefined);
+      await onCamera(trimmedNotes);
       setNotes(''); // Clear notes after use
       console.log('PhotoOptionsSheet: onCamera completed');
     } catch (err) {
@@ -36,9 +37,10 @@ export function PhotoOptionsSheet({
   };
 
   const handleLibraryPress = async () => {
-    console.log('PhotoOptionsSheet: Library button pressed, calling onLibrary...');
+    const trimmedNotes = notes.trim() || undefined;
+    console.log('PhotoOptionsSheet: Library pressed with notes:', trimmedNotes);
     try {
-      await onLibrary(notes.trim() || undefined);
+      await onLibrary(trimmedNotes);
       setNotes(''); // Clear notes after use
       console.log('PhotoOptionsSheet: onLibrary completed');
     } catch (err) {
