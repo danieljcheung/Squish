@@ -5,3 +5,4 @@ export { useNotifications } from './useNotifications';
 export { useErrorHandler } from './useErrorHandler';
 export { useWaterLogging } from './useWaterLogging';
 export { useWorkoutLogging, generateWorkoutConfirmation } from './useWorkoutLogging';
+export { useWeeklySummary, detectSummaryRequest } from './useWeeklySummary';

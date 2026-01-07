@@ -36,6 +36,7 @@ import { useMealLogging } from '@/hooks/useMealLogging';
 import { useMealPhoto } from '@/hooks/useMealPhoto';
 import { useWaterLogging } from '@/hooks/useWaterLogging';
 import { useWorkoutLogging, generateWorkoutConfirmation } from '@/hooks/useWorkoutLogging';
+import { useWeeklySummary, detectSummaryRequest } from '@/hooks/useWeeklySummary';
 import { useToast } from '@/context/ToastContext';
 import { Slime, SlimeColor, SlimeType } from '@/components/slime';
 import { NoMessagesEmptyState, ChatSkeleton, ErrorState } from '@/components/ui';
@@ -45,6 +46,7 @@ import { MealAnalysisBubble } from '@/components/chat/MealAnalysisBubble';
 import { DailyProgressCard } from '@/components/chat/DailyProgressCard';
 import { QuickActionsBar, QuickAction } from '@/components/chat/QuickActionsBar';
 import { QuickReplies, QuickReply, getContextualReplies } from '@/components/chat/QuickReplies';
+import { WeeklySummaryCard } from '@/components/chat/WeeklySummaryCard';
 import { Message, Agent, WorkoutType } from '@/types';
 import { sendMessage as sendToClaudeAPI, generateGreeting } from '@/lib/claude';
 import { parseError, ErrorType } from '@/lib/errors';
@@ -215,6 +217,9 @@ export default function ChatScreen() {
   // Workout logging hook
   const workoutLogging = useWorkoutLogging(agent);
 
+  // Weekly summary hook
+  const weeklySummary = useWeeklySummary(agent);
+
   const scrollViewRef = useRef<ScrollView>(null);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -225,6 +230,7 @@ export default function ChatScreen() {
   const [showWaterSheet, setShowWaterSheet] = useState(false);
   const [confirmedMealId, setConfirmedMealId] = useState<string | null>(null);
   const [showQuickActions, setShowQuickActions] = useState(false);
+  const [showWeeklySummary, setShowWeeklySummary] = useState(false);
 
   // Scroll position tracking
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -563,6 +569,23 @@ export default function ChatScreen() {
         setShowQuickActions(false);
         toggleRotation.value = withTiming(0, { duration: 200 });
         handleSend("How am I doing with my goals?");
+      },
+    },
+    {
+      id: 'weekly-summary',
+      label: 'Summary',
+      icon: 'bar-chart-outline',
+      onPress: async () => {
+        triggerHaptic('light');
+        setShowQuickActions(false);
+        toggleRotation.value = withTiming(0, { duration: 200 });
+        // Fetch and show weekly summary
+        const summary = await weeklySummary.getCurrentWeekSummary();
+        if (summary) {
+          setShowWeeklySummary(true);
+        } else if (weeklySummary.error) {
+          showError(weeklySummary.error);
+        }
       },
     },
     {
@@ -986,6 +1009,15 @@ export default function ChatScreen() {
             todayWorkout={workoutLogging.todayWorkouts[workoutLogging.todayWorkouts.length - 1] || null}
           />
         </View>
+      )}
+
+      {/* Weekly Summary Card */}
+      {showWeeklySummary && weeklySummary.summary && (
+        <WeeklySummaryCard
+          summary={weeklySummary.summary}
+          isCurrentWeek={weeklySummary.getWeekDates().isCurrentWeek}
+          onDismiss={() => setShowWeeklySummary(false)}
+        />
       )}
 
       {/* Floating "New messages" button */}

@@ -195,6 +195,15 @@ export function getContextualReplies(lastAgentMessage: string | undefined): Quic
     ];
   }
 
+  // Weekly summary shown
+  if (message.includes('weekly') || message.includes('this week') || message.includes('summary')) {
+    return [
+      { id: 'summary-tips', text: 'What should I improve?' },
+      { id: 'summary-compare', text: 'vs last week' },
+      { id: 'summary-plan', text: 'Plan for next week' },
+    ];
+  }
+
   // Default - no contextual replies
   return [];
 }

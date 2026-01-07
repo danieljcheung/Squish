@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as Linking from 'expo-linking';
+import { DailyGoalStatus, TrendDirection } from '@/types';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -675,4 +676,118 @@ export const getWeeklyWorkoutStats = async (agentId: string) => {
     },
     error: null,
   };
+};
+
+// ============================================
+// WEEKLY SUMMARIES
+// ============================================
+
+export interface WeeklySummaryInsert {
+  agent_id: string;
+  week_start: string;
+  week_end: string;
+  meals_logged?: number;
+  days_with_meals?: number;
+  avg_daily_calories?: number;
+  avg_daily_protein_g?: number;
+  avg_daily_carbs_g?: number;
+  avg_daily_fat_g?: number;
+  days_at_calorie_goal?: number;
+  avg_daily_water_ml?: number;
+  days_at_water_goal?: number;
+  total_workouts?: number;
+  total_workout_mins?: number;
+  workout_types_json?: Record<string, number>;
+  days_with_workouts?: number;
+  calories_trend?: TrendDirection;
+  workouts_trend?: TrendDirection;
+  water_trend?: TrendDirection;
+  longest_logging_streak?: number;
+  highlights_json?: string[];
+  daily_breakdown_json?: DailyGoalStatus[];
+  is_complete?: boolean;
+}
+
+// Get cached weekly summary
+export const getWeeklySummary = async (agentId: string, weekStart: string) => {
+  const { data, error } = await supabase
+    .from('weekly_summaries')
+    .select('*')
+    .eq('agent_id', agentId)
+    .eq('week_start', weekStart)
+    .single();
+
+  return { data, error };
+};
+
+// Upsert weekly summary (create or update)
+export const upsertWeeklySummary = async (summary: WeeklySummaryInsert) => {
+  const { data, error } = await supabase
+    .from('weekly_summaries')
+    .upsert(
+      {
+        ...summary,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'agent_id,week_start' }
+    )
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// Get daily nutrition data for a date range
+export const getDailyNutritionRange = async (
+  agentId: string,
+  startDate: string,
+  endDate: string
+) => {
+  const { data, error } = await supabase
+    .from('daily_nutrition')
+    .select('*')
+    .eq('agent_id', agentId)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date', { ascending: true });
+
+  return { data, error };
+};
+
+// Get previous week's summary for trend comparison
+export const getPreviousWeeklySummary = async (
+  agentId: string,
+  currentWeekStart: string
+) => {
+  // Calculate previous week's Monday
+  const currentMonday = new Date(currentWeekStart);
+  const previousMonday = new Date(currentMonday);
+  previousMonday.setDate(currentMonday.getDate() - 7);
+  const previousWeekStart = previousMonday.toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('weekly_summaries')
+    .select('*')
+    .eq('agent_id', agentId)
+    .eq('week_start', previousWeekStart)
+    .single();
+
+  return { data, error };
+};
+
+// Get meal logs for a date range
+export const getMealLogsForDateRange = async (
+  agentId: string,
+  startDate: string,
+  endDate: string
+) => {
+  const { data, error } = await supabase
+    .from('meal_logs')
+    .select('*')
+    .eq('agent_id', agentId)
+    .gte('created_at', `${startDate}T00:00:00.000Z`)
+    .lte('created_at', `${endDate}T23:59:59.999Z`)
+    .order('created_at', { ascending: true });
+
+  return { data, error };
 };

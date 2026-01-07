@@ -221,3 +221,60 @@ export const WORKOUT_TYPE_INFO: Record<WorkoutType, { label: string; emoji: stri
   walk: { label: 'Walk', emoji: '🚶' },
   other: { label: 'Workout', emoji: '🏋️' },
 };
+
+// ============================================
+// WEEKLY SUMMARY TYPES
+// ============================================
+
+export type TrendDirection = 'up' | 'down' | 'stable' | 'new';
+
+export interface DailyGoalStatus {
+  date: string;
+  dayOfWeek: number; // 0=Sunday, 1=Monday, etc.
+  caloriesHit: boolean; // within 10% of target
+  waterHit: boolean; // 100%+ of target
+  workoutDone: boolean;
+  totalCalories: number;
+  totalWaterMl: number;
+  workoutMins: number;
+}
+
+export interface WeeklySummary {
+  id: string;
+  agent_id: string;
+  week_start: string; // Monday YYYY-MM-DD
+  week_end: string; // Sunday YYYY-MM-DD
+
+  // Meals
+  meals_logged: number;
+  days_with_meals: number;
+  avg_daily_calories: number;
+  avg_daily_protein_g: number;
+  avg_daily_carbs_g: number;
+  avg_daily_fat_g: number;
+  days_at_calorie_goal: number;
+
+  // Water
+  avg_daily_water_ml: number;
+  days_at_water_goal: number;
+
+  // Workouts
+  total_workouts: number;
+  total_workout_mins: number;
+  workout_types_json: Record<string, number>;
+  days_with_workouts: number;
+
+  // Trends (vs previous week)
+  calories_trend: TrendDirection;
+  workouts_trend: TrendDirection;
+  water_trend: TrendDirection;
+
+  // Streaks & highlights
+  longest_logging_streak: number;
+  highlights_json: string[];
+  daily_breakdown_json: DailyGoalStatus[];
+
+  is_complete: boolean;
+  created_at: string;
+  updated_at: string;
+}
