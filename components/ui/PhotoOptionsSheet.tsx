@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { View, Text, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,13 +23,23 @@ export function PhotoOptionsSheet({
   const insets = useSafeAreaInsets();
   const { colors: themeColors } = useTheme();
   const [notes, setNotes] = useState('');
+  // Use ref to preserve notes across re-renders when picker is open
+  const notesRef = useRef('');
+
+  // Update both state and ref when notes change
+  const handleNotesChange = (text: string) => {
+    setNotes(text);
+    notesRef.current = text;
+  };
 
   const handleCameraPress = async () => {
-    const trimmedNotes = notes.trim() || undefined;
+    // Capture notes from ref (persists across re-renders)
+    const trimmedNotes = notesRef.current.trim() || undefined;
     console.log('PhotoOptionsSheet: Camera pressed with notes:', trimmedNotes);
     try {
       await onCamera(trimmedNotes);
-      setNotes(''); // Clear notes after use
+      setNotes('');
+      notesRef.current = '';
       console.log('PhotoOptionsSheet: onCamera completed');
     } catch (err) {
       console.error('PhotoOptionsSheet: onCamera error:', err);
@@ -37,11 +47,13 @@ export function PhotoOptionsSheet({
   };
 
   const handleLibraryPress = async () => {
-    const trimmedNotes = notes.trim() || undefined;
+    // Capture notes from ref (persists across re-renders)
+    const trimmedNotes = notesRef.current.trim() || undefined;
     console.log('PhotoOptionsSheet: Library pressed with notes:', trimmedNotes);
     try {
       await onLibrary(trimmedNotes);
-      setNotes(''); // Clear notes after use
+      setNotes('');
+      notesRef.current = '';
       console.log('PhotoOptionsSheet: onLibrary completed');
     } catch (err) {
       console.error('PhotoOptionsSheet: onLibrary error:', err);
@@ -49,7 +61,8 @@ export function PhotoOptionsSheet({
   };
 
   const handleClose = () => {
-    setNotes(''); // Clear notes on close
+    setNotes('');
+    notesRef.current = '';
     onClose();
   };
 
@@ -79,7 +92,7 @@ export function PhotoOptionsSheet({
               placeholder="Add notes (optional): 'ate half', '200g chicken', 'no dressing'..."
               placeholderTextColor={themeColors.textMuted}
               value={notes}
-              onChangeText={setNotes}
+              onChangeText={handleNotesChange}
               multiline
               numberOfLines={2}
             />
