@@ -689,9 +689,9 @@ export default function ChatScreen() {
   };
 
   // Handle confirming a meal
-  const handleConfirmMeal = async () => {
+  const handleConfirmMeal = async (context?: string) => {
     await triggerHaptic('medium');
-    const success = await mealLogging.confirmMeal();
+    const success = await mealLogging.confirmMeal(context ? { notes: context } : undefined);
 
     if (success) {
       // Set confirmed ID for UI feedback
@@ -985,19 +985,25 @@ export default function ChatScreen() {
         )}
       </ScrollView>
 
-      {/* Pending Meal Analysis */}
-      {mealLogging.pendingMeal && (
-        <View style={[styles.mealAnalysisContainer, { backgroundColor: themeColors.background }]}>
-          <MealAnalysisBubble
-            photoUrl={mealLogging.pendingMeal.photoUrl}
-            analysis={mealLogging.pendingMeal.analysis}
-            onConfirm={handleConfirmMeal}
-            onCancel={handleCancelMeal}
-            isConfirming={mealLogging.saving}
-            isConfirmed={confirmedMealId === mealLogging.pendingMeal.photoUrl}
-          />
-        </View>
-      )}
+      {/* Pending Meal Analysis Modal */}
+      <MealAnalysisBubble
+        visible={!!mealLogging.pendingMeal}
+        photoUrl={mealLogging.pendingMeal?.photoUrl || ''}
+        analysis={mealLogging.pendingMeal?.analysis || {
+          description: '',
+          mealType: 'snack',
+          calories: 0,
+          proteinG: 0,
+          carbsG: 0,
+          fatG: 0,
+          confidence: 'medium',
+          breakdown: [],
+        }}
+        onConfirm={handleConfirmMeal}
+        onCancel={handleCancelMeal}
+        isConfirming={mealLogging.saving}
+        isConfirmed={confirmedMealId === mealLogging.pendingMeal?.photoUrl}
+      />
 
       {/* Daily Progress after confirming meal, logging water, or logging workout */}
       {mealLogging.todayNutrition && (
@@ -1382,12 +1388,6 @@ const styles = StyleSheet.create({
   },
   toggleButtonActive: {
     backgroundColor: colors.primary,
-  },
-  // Meal analysis container
-  mealAnalysisContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.background,
   },
   // Daily progress container
   dailyProgressContainer: {

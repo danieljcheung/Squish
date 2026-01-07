@@ -123,6 +123,7 @@ export interface MealAnalysis {
     calories: number;
     portion: string;
   }>;
+  notes?: string;
 }
 
 export interface MealLog {
