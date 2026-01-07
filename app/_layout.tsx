@@ -17,6 +17,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '@/constants/colors';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
+import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 
 export {
   ErrorBoundary,
@@ -52,29 +53,38 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
-      <ToastProvider>
-        <AuthProvider>
-          <RootLayoutNav />
-        </AuthProvider>
-      </ToastProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <ThemedApp />
+          </AuthProvider>
+        </ToastProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
 
-function RootLayoutNav() {
+function ThemedApp() {
+  const { isDarkMode, colors: themeColors } = useTheme();
   const { loading } = useAuth();
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.mint} />
+      <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}>
+        <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+        <ActivityIndicator size="large" color={themeColors.primary} />
       </View>
     );
   }
 
-  return <Slot />;
+  return (
+    <>
+      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+      <Slot />
+    </>
+  );
 }
+
 
 const styles = StyleSheet.create({
   loadingContainer: {

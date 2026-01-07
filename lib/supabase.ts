@@ -791,3 +791,98 @@ export const getMealLogsForDateRange = async (
 
   return { data, error };
 };
+
+// ============================================
+// ACCOUNT MANAGEMENT
+// ============================================
+
+// Delete all user data (agents, messages, etc.)
+// Note: This deletes user data but not the auth user itself
+// (that requires admin privileges or Edge Function)
+export const deleteUserAccountData = async () => {
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return { error: userError || new Error('No user found') };
+    }
+
+    // Delete in order respecting foreign key constraints
+    // 1. Delete push tokens
+    const { error: pushError } = await supabase
+      .from('push_tokens')
+      .delete()
+      .eq('user_id', user.id);
+    if (pushError) console.error('Error deleting push tokens:', pushError);
+
+    // 2. Get all agent IDs for this user
+    const { data: agents } = await supabase
+      .from('agents')
+      .select('id')
+      .eq('user_id', user.id);
+
+    if (agents && agents.length > 0) {
+      const agentIds = agents.map(a => a.id);
+
+      // 3. Delete messages for all agents
+      const { error: msgError } = await supabase
+        .from('messages')
+        .delete()
+        .in('agent_id', agentIds);
+      if (msgError) console.error('Error deleting messages:', msgError);
+
+      // 4. Delete agent memory
+      const { error: memError } = await supabase
+        .from('agent_memory')
+        .delete()
+        .in('agent_id', agentIds);
+      if (memError) console.error('Error deleting agent memory:', memError);
+
+      // 5. Delete meal logs
+      const { error: mealError } = await supabase
+        .from('meal_logs')
+        .delete()
+        .in('agent_id', agentIds);
+      if (mealError) console.error('Error deleting meal logs:', mealError);
+
+      // 6. Delete water logs
+      const { error: waterError } = await supabase
+        .from('water_logs')
+        .delete()
+        .in('agent_id', agentIds);
+      if (waterError) console.error('Error deleting water logs:', waterError);
+
+      // 7. Delete workout logs
+      const { error: workoutError } = await supabase
+        .from('workout_logs')
+        .delete()
+        .in('agent_id', agentIds);
+      if (workoutError) console.error('Error deleting workout logs:', workoutError);
+
+      // 8. Delete daily nutrition
+      const { error: nutritionError } = await supabase
+        .from('daily_nutrition')
+        .delete()
+        .in('agent_id', agentIds);
+      if (nutritionError) console.error('Error deleting daily nutrition:', nutritionError);
+
+      // 9. Delete weekly summaries
+      const { error: summaryError } = await supabase
+        .from('weekly_summaries')
+        .delete()
+        .in('agent_id', agentIds);
+      if (summaryError) console.error('Error deleting weekly summaries:', summaryError);
+
+      // 10. Delete agents
+      const { error: agentError } = await supabase
+        .from('agents')
+        .delete()
+        .eq('user_id', user.id);
+      if (agentError) console.error('Error deleting agents:', agentError);
+    }
+
+    return { error: null };
+  } catch (error) {
+    console.error('deleteUserAccountData error:', error);
+    return { error: error as Error };
+  }
+};

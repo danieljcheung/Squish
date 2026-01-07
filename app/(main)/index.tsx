@@ -17,6 +17,7 @@ import { colors } from '@/constants/colors';
 import { fonts } from '@/constants/fonts';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useAgents, AgentWithLastMessage } from '@/hooks/useAgent';
 import { useToast } from '@/context/ToastContext';
 import { Slime, SlimeColor, SlimeType } from '@/components/slime';
@@ -217,7 +218,8 @@ const SkeletonCard = () => {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
+  const { colors: themeColors } = useTheme();
   const { agents, loading, error, refetch } = useAgents();
   const { showError } = useToast();
   const [refreshing, setRefreshing] = useState(false);
@@ -235,26 +237,26 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm, backgroundColor: `${themeColors.background}E6` }]}>
         <View style={styles.headerLeft}>
           <WaterDropIcon size={28} />
-          <Text style={styles.headerTitle}>Squish</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.text }]}>Squish</Text>
         </View>
-        <Pressable onPress={signOut} style={styles.profileButton}>
+        <Pressable onPress={() => router.push('/profile')} style={styles.profileButton}>
           {user?.email ? (
-            <View style={styles.profileAvatar}>
-              <Text style={styles.profileInitial}>
+            <View style={[styles.profileAvatar, { borderColor: themeColors.surface }]}>
+              <Text style={[styles.profileInitial, { color: themeColors.textMuted }]}>
                 {user.email.charAt(0).toUpperCase()}
               </Text>
             </View>
           ) : (
-            <View style={styles.profileAvatar}>
-              <Text style={styles.profileInitial}>?</Text>
+            <View style={[styles.profileAvatar, { borderColor: themeColors.surface }]}>
+              <Text style={[styles.profileInitial, { color: themeColors.textMuted }]}>?</Text>
             </View>
           )}
-          <View style={styles.profileOnlineDot} />
+          <View style={[styles.profileOnlineDot, { borderColor: themeColors.surface }]} />
         </Pressable>
       </View>
 
@@ -267,8 +269,8 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.primary}
-            colors={[colors.primary]}
+            tintColor={themeColors.primary}
+            colors={[themeColors.primary]}
           />
         }
       >
