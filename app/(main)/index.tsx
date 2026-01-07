@@ -69,28 +69,27 @@ const HeroSlime = () => (
 const AgentAvatar = ({
   type,
   slimeColor = 'mint',
-  isOnline = true,
-  themeColors,
+  isOnline = true
 }: {
   type: SlimeType;
   slimeColor?: SlimeColor;
   isOnline?: boolean;
-  themeColors: ReturnType<typeof useTheme>['colors'];
 }) => {
   return (
     <View style={styles.avatarContainer}>
-      <View style={[styles.avatarBg, { backgroundColor: `${themeColors.primary}20` }]}>
+      <View style={styles.avatarBg}>
         <Slime color={slimeColor} type={type} size="xs" animated={false} />
       </View>
-      <View style={[styles.statusDot, { backgroundColor: isOnline ? '#4ade80' : '#d1d5db', borderColor: themeColors.surface }]} />
+      <View style={[styles.statusDot, { backgroundColor: isOnline ? '#4ade80' : '#d1d5db' }]} />
     </View>
   );
 };
 
 // Squad agent card
-const AgentCard = ({ agent, index, themeColors }: { agent: AgentWithLastMessage; index: number; themeColors: ReturnType<typeof useTheme>['colors'] }) => {
+const AgentCard = ({ agent, index }: { agent: AgentWithLastMessage; index: number }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
+  const { colors: themeColors } = useTheme();
 
   useEffect(() => {
     Animated.parallel([
@@ -118,20 +117,22 @@ const AgentCard = ({ agent, index, themeColors }: { agent: AgentWithLastMessage;
   return (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
       <Link href={`/chat/${agent.id}`} asChild>
-        <Pressable style={[styles.agentCard, { backgroundColor: themeColors.surface }]}>
-          <AgentAvatar type={agent.type} slimeColor={slimeColor} isOnline={true} themeColors={themeColors} />
-          <View style={styles.agentCardContent}>
-            <View style={styles.agentCardHeader}>
-              <Text style={[styles.agentCardName, { color: themeColors.text }]}>{agent.name}</Text>
-              {lastMessageTime ? (
-                <Text style={[styles.agentCardTime, { color: themeColors.textMuted }]}>{lastMessageTime}</Text>
-              ) : null}
+        <Pressable>
+          <View style={[styles.agentCard, { backgroundColor: themeColors.surface }]}>
+            <AgentAvatar type={agent.type} slimeColor={slimeColor} isOnline={true} />
+            <View style={styles.agentCardContent}>
+              <View style={styles.agentCardHeader}>
+                <Text style={[styles.agentCardName, { color: themeColors.text }]}>{agent.name}</Text>
+                {lastMessageTime ? (
+                  <Text style={[styles.agentCardTime, { color: themeColors.textMuted }]}>{lastMessageTime}</Text>
+                ) : null}
+              </View>
+              <Text style={[styles.agentCardMessage, { color: themeColors.textMuted }]} numberOfLines={1}>
+                {lastMessageContent}
+              </Text>
             </View>
-            <Text style={[styles.agentCardMessage, { color: themeColors.textMuted }]} numberOfLines={1}>
-              {lastMessageContent}
-            </Text>
+            <ChevronRightIcon color={themeColors.textMuted} />
           </View>
-          <ChevronRightIcon color={themeColors.textMuted} />
         </Pressable>
       </Link>
     </Animated.View>
@@ -163,40 +164,47 @@ const MorphButton = () => (
 );
 
 // Empty state
-const EmptyState = ({ themeColors }: { themeColors: ReturnType<typeof useTheme>['colors'] }) => (
-  <View style={[styles.emptyCard, { backgroundColor: themeColors.surface }]}>
-    <View style={[styles.cardBlob, styles.cardBlobTopRight, { backgroundColor: `${themeColors.primary}33` }]} />
-    <View style={[styles.cardBlob, styles.cardBlobBottomLeft]} />
-    <View style={styles.emptyContent}>
-      <HeroSlime />
-      <View style={styles.emptyTextContainer}>
-        <Text style={[styles.emptyTitle, { color: themeColors.text }]}>Meet Squish</Text>
-        <Text style={[styles.emptySubtitle, { color: themeColors.textMuted }]}>Your base slime helper ready to morph!</Text>
+const EmptyState = () => {
+  const { colors: themeColors } = useTheme();
+  return (
+    <View style={[styles.emptyCard, { backgroundColor: themeColors.surface }]}>
+      <View style={[styles.cardBlob, styles.cardBlobTopRight]} />
+      <View style={[styles.cardBlob, styles.cardBlobBottomLeft]} />
+      <View style={styles.emptyContent}>
+        <HeroSlime />
+        <View style={styles.emptyTextContainer}>
+          <Text style={[styles.emptyTitle, { color: themeColors.text }]}>Meet Squish</Text>
+          <Text style={[styles.emptySubtitle, { color: themeColors.textMuted }]}>Your base slime helper ready to morph!</Text>
+        </View>
+        <MorphButton />
       </View>
-      <MorphButton />
     </View>
-  </View>
-);
+  );
+};
 
 // Hero card when agents exist
-const HeroCard = ({ themeColors }: { themeColors: ReturnType<typeof useTheme>['colors'] }) => (
-  <View style={[styles.heroCard, { backgroundColor: themeColors.surface }]}>
-    <View style={[styles.cardBlob, styles.cardBlobTopRight, { backgroundColor: `${themeColors.primary}33` }]} />
-    <View style={[styles.cardBlob, styles.cardBlobBottomLeft]} />
-    <View style={styles.heroContent}>
-      <HeroSlime />
-      <View style={styles.heroTextContainer}>
-        <Text style={[styles.heroTitle, { color: themeColors.text }]}>Meet Squish</Text>
-        <Text style={[styles.heroSubtitle, { color: themeColors.textMuted }]}>Your base slime helper ready to morph!</Text>
+const HeroCard = () => {
+  const { colors: themeColors } = useTheme();
+  return (
+    <View style={[styles.heroCard, { backgroundColor: themeColors.surface }]}>
+      <View style={[styles.cardBlob, styles.cardBlobTopRight]} />
+      <View style={[styles.cardBlob, styles.cardBlobBottomLeft]} />
+      <View style={styles.heroContent}>
+        <HeroSlime />
+        <View style={styles.heroTextContainer}>
+          <Text style={[styles.heroTitle, { color: themeColors.text }]}>Meet Squish</Text>
+          <Text style={[styles.heroSubtitle, { color: themeColors.textMuted }]}>Your base slime helper ready to morph!</Text>
+        </View>
+        <MorphButton />
       </View>
-      <MorphButton />
     </View>
-  </View>
-);
+  );
+};
 
 // Loading skeleton
-const SkeletonCard = ({ themeColors }: { themeColors: ReturnType<typeof useTheme>['colors'] }) => {
+const SkeletonCard = () => {
   const pulseAnim = useRef(new Animated.Value(0.4)).current;
+  const { colors: themeColors } = useTheme();
 
   useEffect(() => {
     Animated.loop(
@@ -209,10 +217,10 @@ const SkeletonCard = ({ themeColors }: { themeColors: ReturnType<typeof useTheme
 
   return (
     <Animated.View style={[styles.skeletonCard, { opacity: pulseAnim, backgroundColor: themeColors.surface }]}>
-      <View style={[styles.skeletonAvatar, { backgroundColor: `${themeColors.primary}30` }]} />
+      <View style={styles.skeletonAvatar} />
       <View style={styles.skeletonContent}>
-        <View style={[styles.skeletonTitle, { backgroundColor: `${themeColors.primary}25` }]} />
-        <View style={[styles.skeletonMessage, { backgroundColor: `${themeColors.primary}15` }]} />
+        <View style={styles.skeletonTitle} />
+        <View style={styles.skeletonMessage} />
       </View>
     </Animated.View>
   );
@@ -278,9 +286,9 @@ export default function HomeScreen() {
       >
         {/* Hero Section */}
         {agents.length === 0 && !loading ? (
-          <EmptyState themeColors={themeColors} />
+          <EmptyState />
         ) : (
-          <HeroCard themeColors={themeColors} />
+          <HeroCard />
         )}
 
         {/* Your Squad Section */}
@@ -296,12 +304,12 @@ export default function HomeScreen() {
             <View style={styles.squadList}>
               {loading ? (
                 <>
-                  <SkeletonCard themeColors={themeColors} />
-                  <SkeletonCard themeColors={themeColors} />
+                  <SkeletonCard />
+                  <SkeletonCard />
                 </>
               ) : (
                 agents.map((agent, index) => (
-                  <AgentCard key={agent.id} agent={agent} index={index} themeColors={themeColors} />
+                  <AgentCard key={agent.id} agent={agent} index={index} />
                 ))
               )}
             </View>
