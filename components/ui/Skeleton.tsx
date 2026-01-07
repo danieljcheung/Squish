@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, ViewStyle } from 'react-native';
 import { colors } from '@/constants/colors';
+import { spacing } from '@/constants/theme';
 
 interface SkeletonProps {
   width?: number | string;
@@ -115,28 +116,33 @@ export function ChatSkeleton() {
 
 const styles = StyleSheet.create({
   skeleton: {
-    backgroundColor: colors.mint,
+    backgroundColor: `${colors.primary}40`,
   },
   // Agent card skeleton
   agentCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 20,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
   },
   agentInfo: {
     flex: 1,
-    marginLeft: 16,
+    marginLeft: spacing.lg,
   },
   listContainer: {
-    padding: 20,
+    padding: spacing.lg,
   },
   // Message skeleton
   messageContainer: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginBottom: spacing.md,
     alignItems: 'flex-end',
   },
   userMessage: {
@@ -148,14 +154,20 @@ const styles = StyleSheet.create({
   messageBubble: {
     backgroundColor: colors.surface,
     borderRadius: 20,
-    padding: 16,
+    padding: spacing.lg,
     maxWidth: '75%',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 1,
   },
   userBubble: {
-    backgroundColor: colors.background,
+    backgroundColor: `${colors.primary}30`,
     marginLeft: 'auto',
+    shadowOpacity: 0,
   },
   chatContainer: {
-    padding: 16,
+    padding: spacing.lg,
   },
 });

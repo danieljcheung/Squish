@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Agent, AgentMemory } from '@/types';
+import { Agent, AgentMemory, Message } from '@/types';
 import {
   getAgent,
   getAgents,
@@ -7,9 +7,15 @@ import {
   deleteAgent as deleteAgentApi,
   getMemories,
   upsertMemory,
+  getLastMessagesForAgents,
 } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { parseError, AppError, ErrorType } from '@/lib/errors';
+
+// Type for agent with last message info
+export interface AgentWithLastMessage extends Agent {
+  lastMessage?: Message;
+}
 
 export function useAgent(agentId: string | undefined) {
   const [agent, setAgent] = useState<Agent | null>(null);
@@ -142,7 +148,7 @@ export function useAgent(agentId: string | undefined) {
 
 export function useAgents() {
   const { user } = useAuth();
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agents, setAgents] = useState<AgentWithLastMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AppError | null>(null);
 
@@ -163,7 +169,24 @@ export function useAgents() {
         setError(appError);
         return;
       }
-      setAgents((data as Agent[]) || []);
+
+      const agentsList = (data as Agent[]) || [];
+
+      // Fetch last messages for all agents
+      if (agentsList.length > 0) {
+        const agentIds = agentsList.map((a) => a.id);
+        const { data: lastMessages } = await getLastMessagesForAgents(agentIds);
+
+        // Merge agents with their last messages
+        const agentsWithMessages: AgentWithLastMessage[] = agentsList.map((agent) => ({
+          ...agent,
+          lastMessage: lastMessages?.[agent.id] as Message | undefined,
+        }));
+
+        setAgents(agentsWithMessages);
+      } else {
+        setAgents([]);
+      }
     } catch (err) {
       const appError = parseError(err);
       setError(appError);

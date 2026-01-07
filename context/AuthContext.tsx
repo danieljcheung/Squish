@@ -80,19 +80,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const tokens = extractTokensFromUrl(url);
     if (tokens) {
-      console.log('Found auth tokens, setting session...');
-      const { data, error } = await supabase.auth.setSession({
-        access_token: tokens.accessToken,
-        refresh_token: tokens.refreshToken,
-      });
+      console.log('Found auth tokens:');
+      console.log('  Access token (first 50 chars):', tokens.accessToken.substring(0, 50));
+      console.log('  Refresh token (first 50 chars):', tokens.refreshToken.substring(0, 50));
 
-      if (error) {
-        console.error('Error setting session:', error);
-      } else {
-        console.log('Session set successfully');
-        setSession(data.session);
-        setUser(data.session?.user ?? null);
+      // First test basic network connectivity
+      try {
+        console.log('Testing network connectivity...');
+        const testResponse = await fetch('https://cjhlyjylqcctllaptasb.supabase.co/rest/v1/', {
+          method: 'GET',
+          headers: {
+            'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+        });
+        console.log('Network test status:', testResponse.status);
+      } catch (netErr) {
+        console.error('Network test failed:', netErr);
       }
+
+      try {
+        const { data, error } = await supabase.auth.setSession({
+          access_token: tokens.accessToken,
+          refresh_token: tokens.refreshToken,
+        });
+
+        if (error) {
+          console.error('Error setting session:', error);
+          console.error('Error details:', JSON.stringify(error, null, 2));
+
+          // Fallback: Try refreshing with just the refresh token
+          console.log('Trying refreshSession as fallback...');
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession({
+            refresh_token: tokens.refreshToken,
+          });
+
+          if (refreshError) {
+            console.error('refreshSession also failed:', refreshError);
+          } else if (refreshData.session) {
+            console.log('refreshSession succeeded!');
+            setSession(refreshData.session);
+            setUser(refreshData.session.user);
+          }
+        } else {
+          console.log('Session set successfully');
+          setSession(data.session);
+          setUser(data.session?.user ?? null);
+        }
+      } catch (e) {
+        console.error('Exception during setSession:', e);
+      }
+    } else {
+      console.log('No tokens found in URL');
     }
   };
 

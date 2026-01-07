@@ -3,3 +3,5 @@ export { useAgentMemory, FITNESS_MEMORY_KEYS, BUDGET_MEMORY_KEYS, STUDY_MEMORY_K
 export { useChat } from './useChat';
 export { useNotifications } from './useNotifications';
 export { useErrorHandler } from './useErrorHandler';
+export { useWaterLogging } from './useWaterLogging';
+export { useWorkoutLogging, generateWorkoutConfirmation } from './useWorkoutLogging';

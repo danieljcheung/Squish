@@ -1,0 +1,24 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- No background - Android provides the background -->
+
+  <!-- Slime body - centered for adaptive icon safe zone -->
+  <ellipse cx="512" cy="560" rx="240" ry="170" fill="#B8E8D0"/>
+
+  <!-- Slime highlight -->
+  <ellipse cx="430" cy="490" rx="50" ry="35" fill="#D4F4E4" opacity="0.6"/>
+
+  <!-- Left eye -->
+  <ellipse cx="430" cy="520" rx="30" ry="35" fill="#2D3436"/>
+  <ellipse cx="437" cy="512" rx="10" ry="12" fill="#FFFFFF"/>
+
+  <!-- Right eye -->
+  <ellipse cx="594" cy="520" rx="30" ry="35" fill="#2D3436"/>
+  <ellipse cx="601" cy="512" rx="10" ry="12" fill="#FFFFFF"/>
+
+  <!-- Cute smile -->
+  <path d="M 470 600 Q 512 650 554 600" stroke="#2D3436" stroke-width="7" fill="none" stroke-linecap="round"/>
+
+  <!-- Blush marks -->
+  <ellipse cx="375" cy="575" rx="22" ry="13" fill="#FFB8B8" opacity="0.5"/>
+  <ellipse cx="649" cy="575" rx="22" ry="13" fill="#FFB8B8" opacity="0.5"/>
+</svg>

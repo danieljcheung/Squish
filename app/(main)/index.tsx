@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,85 +6,222 @@ import {
   Pressable,
   ScrollView,
   RefreshControl,
+  Animated,
+  Easing,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
+import { fonts } from '@/constants/fonts';
+import { spacing } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
-import { useAgents } from '@/hooks/useAgent';
+import { useAgents, AgentWithLastMessage } from '@/hooks/useAgent';
 import { useToast } from '@/context/ToastContext';
-import { Agent } from '@/types';
-import { BaseSlime, CoachSlime } from '@/components/slime';
-import { AgentListSkeleton, ErrorState } from '@/components/ui';
+import { Slime, SlimeColor, SlimeType } from '@/components/slime';
 
-// Slime avatar component that picks the right slime type
-const SlimeAvatar = ({ type, size = 60 }: { type: string; size?: number }) => {
-  switch (type) {
-    case 'fitness':
-      return <CoachSlime size={size} expression="motivated" />;
-    case 'budget':
-      return <BaseSlime size={size} color={colors.slimeBudget} expression="happy" />;
-    case 'study':
-      return <BaseSlime size={size} color={colors.slimeStudy} expression="neutral" />;
-    default:
-      return <BaseSlime size={size} expression="happy" />;
-  }
+// Helper to format relative time
+const formatRelativeTime = (dateString: string | undefined): string => {
+  if (!dateString) return '';
+
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-// Agent card component
-const AgentCard = ({ agent }: { agent: Agent }) => {
+// Water drop icon
+const WaterDropIcon = ({ size = 28 }: { size?: number }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill={colors.primary}>
+    <Path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0L12 2.69z" />
+  </Svg>
+);
+
+// Chevron right icon
+const ChevronRightIcon = ({ color = '#d1d5db' }: { color?: string }) => (
+  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
+    <Path d="M9 18l6-6-6-6" />
+  </Svg>
+);
+
+
+
+// Hero slime using unified component
+const HeroSlime = () => (
+  <View style={styles.heroSlimeContainer}>
+    <Slime color="mint" type="base" size="large" animated />
+  </View>
+);
+
+// Agent avatar using unified Slime component
+const AgentAvatar = ({
+  type,
+  slimeColor = 'mint',
+  isOnline = true
+}: {
+  type: SlimeType;
+  slimeColor?: SlimeColor;
+  isOnline?: boolean;
+}) => {
   return (
-    <Link href={`/chat/${agent.id}`} asChild>
-      <Pressable style={styles.agentCard}>
-        <SlimeAvatar type={agent.type} />
-        <View style={styles.agentInfo}>
-          <Text style={styles.agentName}>{agent.name}</Text>
-          <Text style={styles.agentType}>
-            {agent.type.charAt(0).toUpperCase() + agent.type.slice(1)} Coach
-          </Text>
-          <Text style={styles.lastMessage} numberOfLines={1}>
-            Tap to start chatting!
-          </Text>
-        </View>
-        <View style={styles.chevron}>
-          <Text style={styles.chevronText}>›</Text>
-        </View>
-      </Pressable>
-    </Link>
+    <View style={styles.avatarContainer}>
+      <View style={styles.avatarBg}>
+        <Slime color={slimeColor} type={type} size="xs" animated={false} />
+      </View>
+      <View style={[styles.statusDot, { backgroundColor: isOnline ? '#4ade80' : '#d1d5db' }]} />
+    </View>
   );
 };
 
-// Empty state component
+// Squad agent card
+const AgentCard = ({ agent, index }: { agent: AgentWithLastMessage; index: number }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 300, delay: index * 100, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 300, delay: index * 100, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const getDefaultMessage = (type: string) => {
+    switch (type) {
+      case 'fitness_coach': return "Ready to start your fitness journey!";
+      case 'budget_helper': return "Let's manage your finances!";
+      case 'study_buddy': return "Ready to help you study!";
+      default: return "Ready to help you!";
+    }
+  };
+
+  // Get slime color from persona or default to mint
+  const slimeColor = (agent.persona_json?.slime_color || 'mint') as SlimeColor;
+
+  // Get message preview and time from last message
+  const lastMessageContent = agent.lastMessage?.content || getDefaultMessage(agent.type);
+  const lastMessageTime = formatRelativeTime(agent.lastMessage?.created_at);
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <Link href={`/chat/${agent.id}`} asChild>
+        <Pressable style={styles.agentCard}>
+          <AgentAvatar type={agent.type} slimeColor={slimeColor} isOnline={true} />
+          <View style={styles.agentCardContent}>
+            <View style={styles.agentCardHeader}>
+              <Text style={styles.agentCardName}>{agent.name}</Text>
+              {lastMessageTime ? (
+                <Text style={styles.agentCardTime}>{lastMessageTime}</Text>
+              ) : null}
+            </View>
+            <Text style={styles.agentCardMessage} numberOfLines={1}>
+              {lastMessageContent}
+            </Text>
+          </View>
+          <ChevronRightIcon color="#d1d5db" />
+        </Pressable>
+      </Link>
+    </Animated.View>
+  );
+};
+
+// Morph button component
+const MorphButton = () => (
+  <Pressable onPress={() => router.push('/create/select')}>
+    {({ pressed }) => (
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          backgroundColor: pressed ? '#8ecbb0' : '#bae9d1',
+          paddingHorizontal: 24,
+          paddingVertical: 12,
+          borderRadius: 16,
+          width: 200,
+        }}
+      >
+        <Ionicons name="sparkles" size={20} color="#101914" />
+        <Text style={{ fontSize: 14, fontFamily: fonts.bold, color: '#101914' }}>Morph</Text>
+      </View>
+    )}
+  </Pressable>
+);
+
+// Empty state
 const EmptyState = () => (
-  <View style={styles.emptyState}>
-    <BaseSlime size={120} expression="excited" />
-    <Text style={styles.emptyTitle}>No agents yet!</Text>
-    <Text style={styles.emptySubtitle}>
-      Create your first AI coaching companion{'\n'}to get started on your goals
-    </Text>
-    <View style={styles.emptyHints}>
-      <View style={styles.hintRow}>
-        <CoachSlime size={40} expression="happy" />
-        <Text style={styles.hintText}>Fitness Coach</Text>
+  <View style={styles.emptyCard}>
+    <View style={[styles.cardBlob, styles.cardBlobTopRight]} />
+    <View style={[styles.cardBlob, styles.cardBlobBottomLeft]} />
+    <View style={styles.emptyContent}>
+      <HeroSlime />
+      <View style={styles.emptyTextContainer}>
+        <Text style={styles.emptyTitle}>Meet Squish</Text>
+        <Text style={styles.emptySubtitle}>Your base slime helper ready to morph!</Text>
       </View>
-      <View style={styles.hintRow}>
-        <BaseSlime size={40} color={colors.slimeBudget} expression="happy" />
-        <Text style={styles.hintText}>Budget Buddy</Text>
-      </View>
-      <View style={styles.hintRow}>
-        <BaseSlime size={40} color={colors.slimeStudy} expression="neutral" />
-        <Text style={styles.hintText}>Study Partner</Text>
-      </View>
+      <MorphButton />
     </View>
   </View>
 );
 
+// Hero card when agents exist
+const HeroCard = () => (
+  <View style={styles.heroCard}>
+    <View style={[styles.cardBlob, styles.cardBlobTopRight]} />
+    <View style={[styles.cardBlob, styles.cardBlobBottomLeft]} />
+    <View style={styles.heroContent}>
+      <HeroSlime />
+      <View style={styles.heroTextContainer}>
+        <Text style={styles.heroTitle}>Meet Squish</Text>
+        <Text style={styles.heroSubtitle}>Your base slime helper ready to morph!</Text>
+      </View>
+      <MorphButton />
+    </View>
+  </View>
+);
+
+// Loading skeleton
+const SkeletonCard = () => {
+  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <Animated.View style={[styles.skeletonCard, { opacity: pulseAnim }]}>
+      <View style={styles.skeletonAvatar} />
+      <View style={styles.skeletonContent}>
+        <View style={styles.skeletonTitle} />
+        <View style={styles.skeletonMessage} />
+      </View>
+    </Animated.View>
+  );
+};
+
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
   const { agents, loading, error, refetch } = useAgents();
   const { showError } = useToast();
   const [refreshing, setRefreshing] = useState(false);
 
-  // Show toast when there's an error
   useEffect(() => {
     if (error && !loading) {
       showError(error, refetch);
@@ -100,65 +237,73 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <View style={styles.headerLeft}>
-          <BaseSlime size={44} expression="happy" />
-          <View style={styles.headerText}>
-            <Text style={styles.logo}>Squish</Text>
-            {user && (
-              <Text style={styles.email} numberOfLines={1}>
-                {user.email}
-              </Text>
-            )}
-          </View>
+          <WaterDropIcon size={28} />
+          <Text style={styles.headerTitle}>Squish</Text>
         </View>
-        <Pressable onPress={signOut} style={styles.signOutBtn}>
-          <Text style={styles.signOutText}>Sign Out</Text>
+        <Pressable onPress={signOut} style={styles.profileButton}>
+          {user?.email ? (
+            <View style={styles.profileAvatar}>
+              <Text style={styles.profileInitial}>
+                {user.email.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.profileAvatar}>
+              <Text style={styles.profileInitial}>?</Text>
+            </View>
+          )}
+          <View style={styles.profileOnlineDot} />
         </Pressable>
       </View>
 
       {/* Content */}
       <ScrollView
         style={styles.content}
-        contentContainerStyle={[
-          styles.contentContainer,
-          (error && !loading) && styles.contentContainerCentered,
-        ]}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.mint}
-            colors={[colors.mint]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
       >
-        {loading ? (
-          <AgentListSkeleton count={2} />
-        ) : error ? (
-          <ErrorState
-            message={error.message}
-            onRetry={refetch}
-          />
-        ) : agents.length === 0 ? (
+        {/* Hero Section */}
+        {agents.length === 0 && !loading ? (
           <EmptyState />
         ) : (
-          <View style={styles.agentsList}>
-            <Text style={styles.sectionTitle}>Your Agents</Text>
-            {agents.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} />
-            ))}
+          <HeroCard />
+        )}
+
+        {/* Your Squad Section */}
+        {(agents.length > 0 || loading) && (
+          <View style={styles.squadSection}>
+            <View style={styles.squadHeader}>
+              <Text style={styles.squadTitle}>Your Squad</Text>
+              <Pressable>
+                <Text style={styles.viewAllText}>View All</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.squadList}>
+              {loading ? (
+                <>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </>
+              ) : (
+                agents.map((agent, index) => (
+                  <AgentCard key={agent.id} agent={agent} index={index} />
+                ))
+              )}
+            </View>
           </View>
         )}
       </ScrollView>
-
-      {/* Floating Action Button */}
-      <Link href="/create" asChild>
-        <Pressable style={styles.fab}>
-          <Text style={styles.fabIcon}>+</Text>
-          <Text style={styles.fabText}>Create Agent</Text>
-        </Pressable>
-      </Link>
     </View>
   );
 }
@@ -168,177 +313,264 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  // Header
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 16,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.mint,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
+    backgroundColor: `${colors.background}E6`,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-  headerText: {
-    marginLeft: 12,
-  },
-  logo: {
+  headerTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontFamily: fonts.extraBold,
     color: colors.text,
+    letterSpacing: -0.5,
   },
-  email: {
-    fontSize: 12,
-    color: colors.textLight,
-    marginTop: 2,
-    maxWidth: 180,
+  profileButton: {
+    position: 'relative',
   },
-  signOutBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+  profileAvatar: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    backgroundColor: colors.background,
+    backgroundColor: '#e5e7eb',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.surface,
   },
-  signOutText: {
-    fontSize: 14,
-    color: colors.textLight,
+  profileInitial: {
+    fontSize: 16,
+    fontFamily: fonts.bold,
+    color: colors.textMuted,
   },
+  profileOnlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4ade80',
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  // Content
   content: {
     flex: 1,
   },
   contentContainer: {
-    flexGrow: 1,
-    paddingBottom: 100,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing['2xl'],
   },
-  contentContainerCentered: {
-    justifyContent: 'center',
+  // Hero Card
+  heroCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    padding: spacing.xl,
+    marginTop: spacing.sm,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 8,
+    overflow: 'hidden',
   },
-  // Empty state styles
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
+  emptyCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    padding: spacing.xl,
+    marginTop: spacing.sm,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  cardBlob: {
+    position: 'absolute',
+    borderRadius: 9999,
+  },
+  cardBlobTopRight: {
+    top: -40,
+    right: -40,
+    width: 160,
+    height: 160,
+    backgroundColor: `${colors.primary}33`,
+  },
+  cardBlobBottomLeft: {
+    bottom: -40,
+    left: -40,
+    width: 128,
+    height: 128,
+    backgroundColor: 'rgba(219, 234, 254, 0.3)',
+  },
+  heroContent: {
     alignItems: 'center',
-    paddingHorizontal: 40,
-    paddingTop: 40,
+    zIndex: 10,
+  },
+  emptyContent: {
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  heroSlimeContainer: {
+    marginBottom: spacing.lg,
+  },
+  heroTextContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  emptyTextContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  heroTitle: {
+    fontSize: 28,
+    fontFamily: fonts.extraBold,
+    color: colors.text,
+    letterSpacing: -0.5,
   },
   emptyTitle: {
-    marginTop: 16,
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontFamily: fonts.extraBold,
     color: colors.text,
-    marginBottom: 12,
+    letterSpacing: -0.5,
+  },
+  heroSubtitle: {
+    fontSize: 14,
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    marginTop: 4,
   },
   emptySubtitle: {
-    fontSize: 16,
-    color: colors.textLight,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
+    fontSize: 14,
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    marginTop: 4,
   },
-  emptyHints: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 20,
-    width: '100%',
+  // Squad Section
+  squadSection: {
+    marginTop: spacing.xl,
   },
-  hintRow: {
+  squadHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.background,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.lg,
   },
-  hintText: {
-    fontSize: 16,
+  squadTitle: {
+    fontSize: 20,
+    fontFamily: fonts.bold,
     color: colors.text,
-    marginLeft: 12,
   },
-  // Agents list styles
-  agentsList: {
-    padding: 20,
+  viewAllText: {
+    fontSize: 14,
+    fontFamily: fonts.semiBold,
+    color: colors.textMuted,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 16,
+  squadList: {
+    gap: spacing.md,
   },
+  // Agent Card
   agentCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.lg,
     backgroundColor: colors.surface,
+    padding: spacing.lg,
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowRadius: 4,
     elevation: 2,
   },
-  agentInfo: {
+  agentCardContent: {
     flex: 1,
-    marginLeft: 16,
+    minWidth: 0,
   },
-  agentName: {
-    fontSize: 18,
-    fontWeight: '600',
+  agentCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatarBg: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: `${colors.primary}20`,
+    overflow: 'hidden',
+  },
+  statusDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  agentCardName: {
+    fontSize: 16,
+    fontFamily: fonts.bold,
     color: colors.text,
   },
-  agentType: {
-    fontSize: 13,
-    color: colors.mint,
-    fontWeight: '500',
+  agentCardTime: {
+    fontSize: 10,
+    fontFamily: fonts.medium,
+    color: '#9ca3af',
+  },
+  agentCardMessage: {
+    fontSize: 14,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
     marginTop: 2,
   },
-  lastMessage: {
-    fontSize: 14,
-    color: colors.textLight,
-    marginTop: 4,
-  },
-  chevron: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  chevronText: {
-    fontSize: 20,
-    color: colors.textLight,
-  },
-  // FAB styles
-  fab: {
-    position: 'absolute',
-    bottom: 32,
-    right: 20,
-    left: 20,
-    backgroundColor: colors.mint,
-    borderRadius: 16,
-    paddingVertical: 16,
+  // Skeleton
+  skeletonCard: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.mint,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: 16,
+    marginBottom: spacing.md,
   },
-  fabIcon: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: colors.text,
-    marginRight: 8,
+  skeletonAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: `${colors.primary}30`,
   },
-  fabText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
+  skeletonContent: {
+    flex: 1,
+    marginLeft: spacing.lg,
+  },
+  skeletonTitle: {
+    width: '50%',
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: `${colors.primary}25`,
+    marginBottom: 8,
+  },
+  skeletonMessage: {
+    width: '75%',
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: `${colors.primary}15`,
   },
 });

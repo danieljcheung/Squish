@@ -1,9 +1,18 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useFonts } from 'expo-font';
+import {
+  useFonts,
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from '@expo-google-fonts/plus-jakarta-sans';
 import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { colors } from '@/constants/colors';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
@@ -18,7 +27,11 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
     ...FontAwesome.font,
   });
 
@@ -38,11 +51,14 @@ export default function RootLayout() {
   }
 
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <RootLayoutNav />
-      </AuthProvider>
-    </ToastProvider>
+    <SafeAreaProvider>
+      <StatusBar style="dark" />
+      <ToastProvider>
+        <AuthProvider>
+          <RootLayoutNav />
+        </AuthProvider>
+      </ToastProvider>
+    </SafeAreaProvider>
   );
 }
 

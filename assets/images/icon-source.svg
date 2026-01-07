@@ -1,0 +1,25 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#FFF8F0"/>
+
+  <!-- Slime body -->
+  <ellipse cx="512" cy="600" rx="280" ry="200" fill="#B8E8D0"/>
+
+  <!-- Slime highlight -->
+  <ellipse cx="420" cy="520" rx="60" ry="40" fill="#D4F4E4" opacity="0.6"/>
+
+  <!-- Left eye -->
+  <ellipse cx="420" cy="560" rx="35" ry="40" fill="#2D3436"/>
+  <ellipse cx="428" cy="550" rx="12" ry="14" fill="#FFFFFF"/>
+
+  <!-- Right eye -->
+  <ellipse cx="604" cy="560" rx="35" ry="40" fill="#2D3436"/>
+  <ellipse cx="612" cy="550" rx="12" ry="14" fill="#FFFFFF"/>
+
+  <!-- Cute smile -->
+  <path d="M 460 640 Q 512 700 564 640" stroke="#2D3436" stroke-width="8" fill="none" stroke-linecap="round"/>
+
+  <!-- Blush marks -->
+  <ellipse cx="360" cy="620" rx="25" ry="15" fill="#FFB8B8" opacity="0.5"/>
+  <ellipse cx="664" cy="620" rx="25" ry="15" fill="#FFB8B8" opacity="0.5"/>
+</svg>

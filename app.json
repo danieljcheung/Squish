@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "squish",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
@@ -47,7 +47,14 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos for meal logging.",
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for meal logging."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
