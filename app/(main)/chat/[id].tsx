@@ -29,6 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
 import { spacing, radius } from '@/constants/theme';
 import { fonts } from '@/constants/fonts';
+import { useTheme } from '@/context/ThemeContext';
 import { useAgent } from '@/hooks/useAgent';
 import { useChat } from '@/hooks/useChat';
 import { useAgentMemory } from '@/hooks/useAgentMemory';
@@ -86,6 +87,7 @@ const MessageBubble = ({
   isError?: boolean;
   onRetry?: () => void;
 }) => {
+  const { colors: themeColors, isDarkMode } = useTheme();
   const isUser = message.role === 'user';
 
   return (
@@ -102,22 +104,24 @@ const MessageBubble = ({
       )}
       <View style={[
         styles.bubble,
-        isUser ? styles.userBubble : styles.agentBubble,
+        isUser
+          ? [styles.userBubble, { backgroundColor: themeColors.primary }]
+          : [styles.agentBubble, { backgroundColor: themeColors.surface }],
         isError && styles.errorBubble,
       ]}>
-        <Text style={[styles.bubbleText, isError && styles.errorText]}>
+        <Text style={[styles.bubbleText, { color: themeColors.text }, isError && styles.errorText]}>
           {message.content}
         </Text>
         <View style={styles.bubbleFooter}>
-          <Text style={[styles.timestamp, isError && styles.errorTimestamp]}>
+          <Text style={[styles.timestamp, { color: themeColors.textMuted }, isError && styles.errorTimestamp]}>
             {new Date(message.created_at).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit'
             })}
           </Text>
           {isError && onRetry && (
-            <Pressable onPress={onRetry} style={styles.retryButton}>
-              <Text style={styles.retryText}>Retry</Text>
+            <Pressable onPress={onRetry} style={[styles.retryButton, { backgroundColor: themeColors.primary }]}>
+              <Text style={[styles.retryText, { color: themeColors.text }]}>Retry</Text>
             </Pressable>
           )}
         </View>
@@ -128,6 +132,7 @@ const MessageBubble = ({
 
 // Animated typing indicator
 const TypingIndicator = ({ agent }: { agent?: Agent | null }) => {
+  const { colors: themeColors } = useTheme();
   const dot1Anim = useRef(new RNAnimated.Value(0)).current;
   const dot2Anim = useRef(new RNAnimated.Value(0)).current;
   const dot3Anim = useRef(new RNAnimated.Value(0)).current;
@@ -180,11 +185,11 @@ const TypingIndicator = ({ agent }: { agent?: Agent | null }) => {
       <View style={styles.avatarSmall}>
         <AgentSlime agent={agent} size={32} />
       </View>
-      <View style={[styles.bubble, styles.agentBubble, styles.typingBubble]}>
+      <View style={[styles.bubble, styles.agentBubble, styles.typingBubble, { backgroundColor: themeColors.surface }]}>
         <View style={styles.typingDots}>
-          <RNAnimated.View style={[styles.dot, getDotStyle(dot1Anim)]} />
-          <RNAnimated.View style={[styles.dot, getDotStyle(dot2Anim)]} />
-          <RNAnimated.View style={[styles.dot, getDotStyle(dot3Anim)]} />
+          <RNAnimated.View style={[styles.dot, { backgroundColor: themeColors.textMuted }, getDotStyle(dot1Anim)]} />
+          <RNAnimated.View style={[styles.dot, { backgroundColor: themeColors.textMuted }, getDotStyle(dot2Anim)]} />
+          <RNAnimated.View style={[styles.dot, { backgroundColor: themeColors.textMuted }, getDotStyle(dot3Anim)]} />
         </View>
       </View>
     </View>
@@ -194,6 +199,7 @@ const TypingIndicator = ({ agent }: { agent?: Agent | null }) => {
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { colors: themeColors, isDarkMode } = useTheme();
   const { agent, loading: agentLoading, error: agentError } = useAgent(id);
   const { memories, saveMemories, loading: memoriesLoading } = useAgentMemory(id);
   const {
@@ -886,29 +892,29 @@ export default function ChatScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}>
         <Slime color="mint" type="base" size="small" animated />
-        <Text style={styles.loadingText}>Loading chat...</Text>
+        <Text style={[styles.loadingText, { color: themeColors.textMuted }]}>Loading chat...</Text>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: themeColors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
       {/* Custom Header - Animated */}
-      <Animated.View style={[styles.header, { paddingTop: insets.top + spacing.md }, headerAnimatedStyle]}>
+      <Animated.View style={[styles.header, { paddingTop: insets.top + spacing.md, backgroundColor: `${themeColors.surface}F2` }, headerAnimatedStyle]}>
         <Pressable
           onPress={() => {
             triggerHaptic('light');
             router.back();
           }}
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: themeColors.background }]}
         >
-          <Text style={styles.backButtonText}>‹</Text>
+          <Text style={[styles.backButtonText, { color: themeColors.text }]}>‹</Text>
         </Pressable>
         <Pressable
           style={styles.headerCenter}
@@ -919,8 +925,8 @@ export default function ChatScreen() {
         >
           <AgentSlime agent={agent} size={40} />
           <View style={styles.headerInfo}>
-            <Text style={styles.headerName}>{agent?.name || 'Slime'}</Text>
-            <Text style={[styles.headerStatus, isTyping && styles.headerStatusTyping]}>
+            <Text style={[styles.headerName, { color: themeColors.text }]}>{agent?.name || 'Slime'}</Text>
+            <Text style={[styles.headerStatus, { color: themeColors.textMuted }, isTyping && styles.headerStatusTyping]}>
               {isTyping ? 'Typing...' : 'Online'}
             </Text>
           </View>
@@ -930,9 +936,9 @@ export default function ChatScreen() {
             triggerHaptic('light');
             router.push(`/settings/${id}`);
           }}
-          style={styles.settingsButton}
+          style={[styles.settingsButton, { backgroundColor: themeColors.background }]}
         >
-          <Text style={styles.settingsButtonText}>⚙</Text>
+          <Text style={[styles.settingsButtonText, { color: themeColors.textMuted }]}>⚙</Text>
         </Pressable>
       </Animated.View>
 
@@ -953,8 +959,8 @@ export default function ChatScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.mint}
-            colors={[colors.mint]}
+            tintColor={themeColors.primary}
+            colors={[themeColors.primary]}
             progressViewOffset={HEADER_HEIGHT}
           />
         }
@@ -981,7 +987,7 @@ export default function ChatScreen() {
 
       {/* Pending Meal Analysis */}
       {mealLogging.pendingMeal && (
-        <View style={styles.mealAnalysisContainer}>
+        <View style={[styles.mealAnalysisContainer, { backgroundColor: themeColors.background }]}>
           <MealAnalysisBubble
             photoUrl={mealLogging.pendingMeal.photoUrl}
             analysis={mealLogging.pendingMeal.analysis}
@@ -1000,7 +1006,7 @@ export default function ChatScreen() {
         (mealLogging.todayNutrition.workouts_count || 0) > 0 ||
         workoutLogging.todayWorkouts.length > 0
       ) && !mealLogging.pendingMeal && (
-        <View style={styles.dailyProgressContainer}>
+        <View style={[styles.dailyProgressContainer, { backgroundColor: themeColors.background }]}>
           <DailyProgressCard
             nutrition={mealLogging.todayNutrition}
             goals={(agent?.persona_json as Record<string, any>)?.nutritionGoals}
@@ -1025,12 +1031,13 @@ export default function ChatScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.newMessagesButton,
+            { backgroundColor: themeColors.text },
             pressed && styles.newMessagesButtonPressed,
           ]}
           onPress={scrollToBottom}
         >
-          <Text style={styles.newMessagesText}>New messages</Text>
-          <Ionicons name="arrow-down" size={14} color={colors.surface} />
+          <Text style={[styles.newMessagesText, { color: themeColors.background }]}>New messages</Text>
+          <Ionicons name="arrow-down" size={14} color={themeColors.background} />
         </Pressable>
       )}
 
@@ -1043,13 +1050,14 @@ export default function ChatScreen() {
       <QuickActionsBar actions={quickActions} visible={showQuickActions} />
 
       {/* Input */}
-      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, spacing.lg), backgroundColor: themeColors.surface }]}>
         {/* Quick actions toggle button */}
         <Pressable
           style={({ pressed }) => [
             styles.toggleButton,
+            { backgroundColor: themeColors.background },
             pressed && styles.toggleButtonPressed,
-            showQuickActions && styles.toggleButtonActive,
+            showQuickActions && { backgroundColor: themeColors.primary },
           ]}
           onPress={toggleQuickActions}
         >
@@ -1057,17 +1065,17 @@ export default function ChatScreen() {
             <Ionicons
               name="add"
               size={24}
-              color={showQuickActions ? colors.surface : colors.text}
+              color={showQuickActions ? '#101914' : themeColors.text}
             />
           </Animated.View>
         </Pressable>
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: themeColors.background, color: themeColors.text }]}
           value={inputText}
           onChangeText={setInputText}
           placeholder="Type a message..."
-          placeholderTextColor={colors.textLight}
+          placeholderTextColor={themeColors.textMuted}
           onSubmitEditing={() => handleSend()}
           returnKeyType="send"
           multiline
@@ -1077,16 +1085,17 @@ export default function ChatScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.sendButton,
-            (!inputText.trim() || sending || isTyping) && styles.sendButtonDisabled,
+            { backgroundColor: themeColors.primary },
+            (!inputText.trim() || sending || isTyping) && { backgroundColor: themeColors.background },
             pressed && inputText.trim() && !sending && !isTyping && styles.sendButtonPressed,
           ]}
           onPress={() => handleSend()}
           disabled={!inputText.trim() || sending || isTyping}
         >
           {sending ? (
-            <ActivityIndicator size="small" color={colors.text} />
+            <ActivityIndicator size="small" color={themeColors.text} />
           ) : (
-            <Text style={styles.sendButtonText}>↑</Text>
+            <Text style={[styles.sendButtonText, { color: themeColors.text }]}>↑</Text>
           )}
         </Pressable>
       </View>
