@@ -28,6 +28,7 @@ import Animated, {
 import { colors } from '@/constants/colors';
 import { fonts } from '@/constants/fonts';
 import { spacing, shadows, typography } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { createAgent } from '@/lib/supabase';
@@ -181,12 +182,14 @@ const ChatBubble = ({
   animate = false,
   timestamp,
   isLast = false,
+  themeColors,
 }: {
   text: string;
   isUser: boolean;
   animate?: boolean;
   timestamp?: string;
   isLast?: boolean;
+  themeColors: ReturnType<typeof useTheme>['colors'];
 }) => {
   const fadeAnim = useRef(new RNAnimated.Value(animate ? 0 : 1)).current;
   const slideAnim = useRef(new RNAnimated.Value(animate ? 10 : 0)).current;
@@ -218,13 +221,18 @@ const ChatBubble = ({
       ]}
     >
       <View style={styles.bubbleContent}>
-        <View style={[styles.bubble, isUser ? styles.userBubble : styles.botBubble]}>
-          <Text style={[styles.bubbleText, isUser && styles.userBubbleText]}>
+        <View style={[
+          styles.bubble,
+          isUser
+            ? [styles.userBubble, { backgroundColor: themeColors.primary }]
+            : [styles.botBubble, { backgroundColor: themeColors.surface }]
+        ]}>
+          <Text style={[styles.bubbleText, { color: themeColors.text }, isUser && styles.userBubbleText]}>
             {text}
           </Text>
         </View>
         {timestamp && (
-          <Text style={styles.timestamp}>{timestamp}</Text>
+          <Text style={[styles.timestamp, { color: themeColors.textMuted }]}>{timestamp}</Text>
         )}
       </View>
     </RNAnimated.View>
@@ -232,10 +240,10 @@ const ChatBubble = ({
 };
 
 // Progress bar component
-const ProgressBar = ({ progress }: { progress: number }) => {
+const ProgressBar = ({ progress, themeColors }: { progress: number; themeColors: ReturnType<typeof useTheme>['colors'] }) => {
   return (
-    <View style={styles.progressBarOuter}>
-      <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
+    <View style={[styles.progressBarOuter, { backgroundColor: themeColors.surface }]}>
+      <View style={[styles.progressBarFill, { width: `${progress * 100}%`, backgroundColor: themeColors.primary }]} />
     </View>
   );
 };
@@ -245,10 +253,12 @@ const OptionButton = ({
   text,
   onPress,
   delay = 0,
+  themeColors,
 }: {
   text: string;
   onPress: () => void;
   delay?: number;
+  themeColors: ReturnType<typeof useTheme>['colors'];
 }) => {
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
 
@@ -266,11 +276,12 @@ const OptionButton = ({
       <Pressable
         style={({ pressed }) => [
           styles.optionButton,
-          pressed && styles.optionButtonPressed,
+          { backgroundColor: themeColors.surface, borderColor: themeColors.primary },
+          pressed && { backgroundColor: themeColors.primary, transform: [{ scale: 0.98 }] },
         ]}
         onPress={onPress}
       >
-        <Text style={styles.optionButtonText}>{text}</Text>
+        <Text style={[styles.optionButtonText, { color: themeColors.text }]}>{text}</Text>
       </Pressable>
     </RNAnimated.View>
   );
@@ -281,10 +292,12 @@ const ColorSwatch = ({
   color,
   isSelected,
   onPress,
+  themeColors,
 }: {
   color: { name: SlimeColor; hex: string };
   isSelected: boolean;
   onPress: () => void;
+  themeColors: ReturnType<typeof useTheme>['colors'];
 }) => {
   const scale = useSharedValue(1);
 
@@ -306,7 +319,7 @@ const ColorSwatch = ({
         style={[
           styles.colorSwatch,
           { backgroundColor: color.hex },
-          isSelected && styles.colorSwatchSelected,
+          isSelected && [styles.colorSwatchSelected, { borderColor: themeColors.text }],
           animatedStyle,
         ]}
       >
@@ -355,11 +368,13 @@ const TransformationScreen = ({
   targetType,
   coachName,
   onComplete,
+  themeColors,
 }: {
   targetColor: SlimeColor;
   targetType: SlimeType;
   coachName: string;
   onComplete: () => void;
+  themeColors: ReturnType<typeof useTheme>['colors'];
 }) => {
   const [showFinalSlime, setShowFinalSlime] = useState(false);
   const opacity = useSharedValue(0);
@@ -445,7 +460,7 @@ const TransformationScreen = ({
       <Animated.View
         style={[
           styles.transformationGlow,
-          { backgroundColor: showFinalSlime ? colors.slime[targetColor] : colors.primary },
+          { backgroundColor: showFinalSlime ? colors.slime[targetColor] : themeColors.primary },
           glowStyle
         ]}
       />
@@ -463,7 +478,7 @@ const TransformationScreen = ({
 
       {/* Creating text */}
       <View style={styles.transformationTextContainer}>
-        <Text style={styles.transformationText}>
+        <Text style={[styles.transformationText, { color: themeColors.textMuted }]}>
           {showFinalSlime ? `${coachName} is ready!` : `Creating ${coachName}...`}
         </Text>
       </View>
@@ -471,7 +486,7 @@ const TransformationScreen = ({
       {/* Animated sparkles */}
       <View style={styles.sparklesContainer}>
         {sparklePositions.map((pos, i) => (
-          <SparkleParticle key={i} position={pos} delay={pos.delay} />
+          <SparkleParticle key={i} position={pos} delay={pos.delay} themeColors={themeColors} />
         ))}
       </View>
     </View>
@@ -482,9 +497,11 @@ const TransformationScreen = ({
 const SparkleParticle = ({
   position,
   delay,
+  themeColors,
 }: {
   position: { top: number; left: number };
   delay: number;
+  themeColors: ReturnType<typeof useTheme>['colors'];
 }) => {
   const sparkleOpacity = useSharedValue(0);
   const sparkleScale = useSharedValue(0);
@@ -516,7 +533,7 @@ const SparkleParticle = ({
     <Animated.View
       style={[
         styles.sparkle,
-        { top: position.top, left: position.left },
+        { top: position.top, left: position.left, backgroundColor: themeColors.primary },
         sparkleStyle,
       ]}
     />
@@ -525,6 +542,7 @@ const SparkleParticle = ({
 
 export default function CreateAgentScreen() {
   const insets = useSafeAreaInsets();
+  const { colors: themeColors } = useTheme();
   const { user } = useAuth();
   const { showError, showSuccess } = useToast();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -752,29 +770,30 @@ export default function CreateAgentScreen() {
   // Render color picker phase
   if (phase === 'colorPicker') {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: themeColors.background }]}>
         {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
+        <View style={[styles.header, { paddingTop: insets.top + spacing.lg, backgroundColor: themeColors.background }]}>
           <View style={styles.headerContent}>
             <Pressable
               style={({ pressed }) => [
                 styles.backButton,
+                { backgroundColor: themeColors.surface },
                 pressed && styles.backButtonPressed,
               ]}
               onPress={() => setPhase('interview')}
             >
-              <Ionicons name="arrow-back" size={20} color={colors.text} />
+              <Ionicons name="arrow-back" size={20} color={themeColors.text} />
             </Pressable>
-            <Text style={styles.headerTitle}>CUSTOMIZE</Text>
+            <Text style={[styles.headerTitle, { color: themeColors.textMuted }]}>CUSTOMIZE</Text>
             <View style={styles.headerSpacer} />
           </View>
-          <ProgressBar progress={getProgress()} />
+          <ProgressBar progress={getProgress()} themeColors={themeColors} />
         </View>
 
         {/* Content */}
         <View style={styles.colorPickerContent}>
-          <Text style={styles.colorPickerTitle}>Choose your coach's color</Text>
-          <Text style={styles.colorPickerSubtitle}>
+          <Text style={[styles.colorPickerTitle, { color: themeColors.text }]}>Choose your coach's color</Text>
+          <Text style={[styles.colorPickerSubtitle, { color: themeColors.textMuted }]}>
             Pick a color that matches your vibe!
           </Text>
 
@@ -791,22 +810,24 @@ export default function CreateAgentScreen() {
                 color={color}
                 isSelected={selectedColor === color.name}
                 onPress={() => handleColorSelect(color.name)}
+                themeColors={themeColors}
               />
             ))}
           </View>
         </View>
 
         {/* Continue button */}
-        <View style={[styles.inputArea, { paddingBottom: insets.bottom + spacing.lg }]}>
+        <View style={[styles.inputArea, { paddingBottom: insets.bottom + spacing.lg, backgroundColor: themeColors.surface, borderTopColor: themeColors.background }]}>
           <Pressable
             style={({ pressed }) => [
               styles.continueButton,
-              pressed && styles.continueButtonPressed,
+              { backgroundColor: themeColors.primary },
+              pressed && { backgroundColor: colors.primaryDark, transform: [{ scale: 0.98 }] },
             ]}
             onPress={handleColorConfirm}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={20} color={colors.text} />
+            <Text style={[styles.continueButtonText, { color: themeColors.text }]}>Continue</Text>
+            <Ionicons name="arrow-forward" size={20} color={themeColors.text} />
           </Pressable>
         </View>
       </View>
@@ -817,32 +838,33 @@ export default function CreateAgentScreen() {
   if (phase === 'namePicker') {
     return (
       <KeyboardAvoidingView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: themeColors.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={100}
       >
         {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
+        <View style={[styles.header, { paddingTop: insets.top + spacing.lg, backgroundColor: themeColors.background }]}>
           <View style={styles.headerContent}>
             <Pressable
               style={({ pressed }) => [
                 styles.backButton,
+                { backgroundColor: themeColors.surface },
                 pressed && styles.backButtonPressed,
               ]}
               onPress={() => setPhase('colorPicker')}
             >
-              <Ionicons name="arrow-back" size={20} color={colors.text} />
+              <Ionicons name="arrow-back" size={20} color={themeColors.text} />
             </Pressable>
-            <Text style={styles.headerTitle}>NAME</Text>
+            <Text style={[styles.headerTitle, { color: themeColors.textMuted }]}>NAME</Text>
             <View style={styles.headerSpacer} />
           </View>
-          <ProgressBar progress={getProgress()} />
+          <ProgressBar progress={getProgress()} themeColors={themeColors} />
         </View>
 
         {/* Content */}
         <View style={styles.colorPickerContent}>
-          <Text style={styles.colorPickerTitle}>Name your Squish</Text>
-          <Text style={styles.colorPickerSubtitle}>
+          <Text style={[styles.colorPickerTitle, { color: themeColors.text }]}>Name your Squish</Text>
+          <Text style={[styles.colorPickerSubtitle, { color: themeColors.textMuted }]}>
             What should your {agentConfig?.name || 'Squish'} be called?
           </Text>
 
@@ -854,11 +876,11 @@ export default function CreateAgentScreen() {
           {/* Name input */}
           <View style={styles.nameInputContainer}>
             <TextInput
-              style={styles.nameInput}
+              style={[styles.nameInput, { backgroundColor: themeColors.surface, borderColor: themeColors.primary, color: themeColors.text }]}
               value={coachName}
               onChangeText={setCoachName}
               placeholder="Coach"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={themeColors.textMuted}
               autoFocus={false}
               returnKeyType="done"
               onSubmitEditing={handleNameSubmit}
@@ -867,16 +889,17 @@ export default function CreateAgentScreen() {
         </View>
 
         {/* Continue button */}
-        <View style={[styles.inputArea, { paddingBottom: insets.bottom + spacing.lg }]}>
+        <View style={[styles.inputArea, { paddingBottom: insets.bottom + spacing.lg, backgroundColor: themeColors.surface, borderTopColor: themeColors.background }]}>
           <Pressable
             style={({ pressed }) => [
               styles.continueButton,
-              pressed && styles.continueButtonPressed,
+              { backgroundColor: themeColors.primary },
+              pressed && { backgroundColor: colors.primaryDark, transform: [{ scale: 0.98 }] },
             ]}
             onPress={handleNameSubmit}
           >
-            <Text style={styles.continueButtonText}>Create Squish</Text>
-            <Ionicons name="sparkles" size={20} color={colors.text} />
+            <Text style={[styles.continueButtonText, { color: themeColors.text }]}>Create Squish</Text>
+            <Ionicons name="sparkles" size={20} color={themeColors.text} />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -886,12 +909,13 @@ export default function CreateAgentScreen() {
   // Render transformation phase
   if (phase === 'transformation') {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: themeColors.background }]}>
         <TransformationScreen
           targetColor={selectedColor}
           targetType={slimeType}
           coachName={coachName || agentConfig?.name || 'Squish'}
           onComplete={handleTransformationComplete}
+          themeColors={themeColors}
         />
       </View>
     );
@@ -900,26 +924,27 @@ export default function CreateAgentScreen() {
   // Render interview phase (default)
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: themeColors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={100}
     >
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.lg, backgroundColor: themeColors.background }]}>
         <View style={styles.headerContent}>
           <Pressable
             style={({ pressed }) => [
               styles.backButton,
+              { backgroundColor: themeColors.surface },
               pressed && styles.backButtonPressed,
             ]}
             onPress={() => router.back()}
           >
-            <Ionicons name="arrow-back" size={20} color={colors.text} />
+            <Ionicons name="arrow-back" size={20} color={themeColors.text} />
           </Pressable>
-          <Text style={styles.headerTitle}>ONBOARDING</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.textMuted }]}>ONBOARDING</Text>
           <View style={styles.headerSpacer} />
         </View>
-        <ProgressBar progress={getProgress()} />
+        <ProgressBar progress={getProgress()} themeColors={themeColors} />
       </View>
 
       {/* Chat messages */}
@@ -936,13 +961,14 @@ export default function CreateAgentScreen() {
             animate={index === chatHistory.length - 1}
             timestamp={!msg.isUser && index === chatHistory.length - 1 ? 'Just now' : undefined}
             isLast={index === chatHistory.length - 1}
+            themeColors={themeColors}
           />
         ))}
       </ScrollView>
 
       {/* Input area */}
       {showOptions && (
-        <View style={styles.inputArea}>
+        <View style={[styles.inputArea, { backgroundColor: themeColors.surface, borderTopColor: themeColors.background }]}>
           {currentQ.type === 'choice' && currentQ.options ? (
             <View style={styles.optionsContainer}>
               {currentQ.options.map((option, index) => (
@@ -951,6 +977,7 @@ export default function CreateAgentScreen() {
                   text={option}
                   onPress={() => handleResponse(option)}
                   delay={index * 50}
+                  themeColors={themeColors}
                 />
               ))}
             </View>
@@ -977,12 +1004,13 @@ export default function CreateAgentScreen() {
               <Pressable
                 style={({ pressed }) => [
                   styles.sendButton,
-                  pressed && styles.sendButtonPressed,
-                  !numberInput.trim() && styles.sendButtonDisabled,
+                  { backgroundColor: themeColors.primary },
+                  pressed && { backgroundColor: colors.primaryDark, transform: [{ scale: 0.95 }] },
+                  !numberInput.trim() && { backgroundColor: themeColors.background },
                 ]}
                 onPress={handleNumberSubmit}
               >
-                <Ionicons name="send" size={24} color={colors.text} />
+                <Ionicons name="send" size={24} color={themeColors.text} />
               </Pressable>
             </View>
           ) : (
@@ -990,15 +1018,16 @@ export default function CreateAgentScreen() {
               <View
                 style={[
                   styles.inputWrapper,
-                  inputFocused && styles.inputWrapperFocused,
+                  { backgroundColor: themeColors.background },
+                  inputFocused && { borderColor: `${themeColors.primary}80` },
                 ]}
               >
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, { color: themeColors.text }]}
                   value={textInput}
                   onChangeText={setTextInput}
                   placeholder={currentQ.placeholder || 'Type your answer...'}
-                  placeholderTextColor="rgba(156, 163, 175, 0.8)"
+                  placeholderTextColor={themeColors.textMuted}
                   onFocus={() => setInputFocused(true)}
                   onBlur={() => setInputFocused(false)}
                   onSubmitEditing={handleTextSubmit}
@@ -1008,12 +1037,13 @@ export default function CreateAgentScreen() {
               <Pressable
                 style={({ pressed }) => [
                   styles.sendButton,
-                  pressed && styles.sendButtonPressed,
-                  !textInput.trim() && styles.sendButtonDisabled,
+                  { backgroundColor: themeColors.primary },
+                  pressed && { backgroundColor: colors.primaryDark, transform: [{ scale: 0.95 }] },
+                  !textInput.trim() && { backgroundColor: themeColors.background },
                 ]}
                 onPress={handleTextSubmit}
               >
-                <Ionicons name="send" size={24} color={colors.text} />
+                <Ionicons name="send" size={24} color={themeColors.text} />
               </Pressable>
             </View>
           )}

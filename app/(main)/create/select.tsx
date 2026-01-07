@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
 import { fonts } from '@/constants/fonts';
 import { spacing, shadows, typography } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
 import { Slime, SlimeColor, SlimeType } from '@/components/slime';
 import { AGENT_TYPES, AgentTypeConfig } from '@/constants/agentTypes';
@@ -13,9 +14,11 @@ import { AGENT_TYPES, AgentTypeConfig } from '@/constants/agentTypes';
 const AgentTypeCard = ({
   config,
   onPress,
+  themeColors,
 }: {
   config: AgentTypeConfig;
   onPress: () => void;
+  themeColors: ReturnType<typeof useTheme>['colors'];
 }) => {
   const isAvailable = config.available;
 
@@ -23,7 +26,8 @@ const AgentTypeCard = ({
     <Pressable
       style={({ pressed }) => [
         styles.card,
-        pressed && isAvailable && styles.cardPressed,
+        { backgroundColor: themeColors.surface },
+        pressed && isAvailable && { backgroundColor: themeColors.primary, transform: [{ scale: 0.98 }] },
         !isAvailable && styles.cardDisabled,
       ]}
       onPress={onPress}
@@ -31,8 +35,8 @@ const AgentTypeCard = ({
     >
       {/* Coming Soon Badge */}
       {!isAvailable && (
-        <View style={styles.comingSoonBadge}>
-          <Text style={styles.comingSoonText}>Coming Soon</Text>
+        <View style={[styles.comingSoonBadge, { backgroundColor: themeColors.textMuted }]}>
+          <Text style={[styles.comingSoonText, { color: themeColors.surface }]}>Coming Soon</Text>
         </View>
       )}
 
@@ -49,10 +53,10 @@ const AgentTypeCard = ({
 
       {/* Text Content */}
       <View style={styles.cardContent}>
-        <Text style={[styles.cardTitle, !isAvailable && styles.cardTitleDisabled]}>
+        <Text style={[styles.cardTitle, { color: themeColors.text }, !isAvailable && { color: themeColors.textMuted }]}>
           {config.name}
         </Text>
-        <Text style={[styles.cardDescription, !isAvailable && styles.cardDescriptionDisabled]}>
+        <Text style={[styles.cardDescription, { color: themeColors.textMuted }, !isAvailable && { opacity: 0.6 }]}>
           {config.description}
         </Text>
       </View>
@@ -60,7 +64,7 @@ const AgentTypeCard = ({
       {/* Arrow */}
       {isAvailable && (
         <View style={styles.arrowContainer}>
-          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          <Ionicons name="chevron-forward" size={20} color={themeColors.textMuted} />
         </View>
       )}
     </Pressable>
@@ -68,15 +72,16 @@ const AgentTypeCard = ({
 };
 
 // Placeholder card for future Squish types
-const MoreComingCard = () => (
-  <View style={styles.moreComingCard}>
-    <Ionicons name="add-circle-outline" size={32} color={colors.textMuted} />
-    <Text style={styles.moreComingText}>More Squish coming soon...</Text>
+const MoreComingCard = ({ themeColors }: { themeColors: ReturnType<typeof useTheme>['colors'] }) => (
+  <View style={[styles.moreComingCard, { borderColor: themeColors.surface }]}>
+    <Ionicons name="add-circle-outline" size={32} color={themeColors.textMuted} />
+    <Text style={[styles.moreComingText, { color: themeColors.textMuted }]}>More Squish coming soon...</Text>
   </View>
 );
 
 export default function AgentSelectionScreen() {
   const insets = useSafeAreaInsets();
+  const { colors: themeColors } = useTheme();
   const { showToast } = useToast();
 
   const handleSelectAgent = (config: AgentTypeConfig) => {
@@ -97,22 +102,23 @@ export default function AgentSelectionScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.lg, backgroundColor: themeColors.background }]}>
         <View style={styles.headerContent}>
           <Pressable
             style={({ pressed }) => [
               styles.backButton,
+              { backgroundColor: themeColors.surface },
               pressed && styles.backButtonPressed,
             ]}
             onPress={() => router.back()}
           >
-            <Ionicons name="arrow-back" size={20} color={colors.text} />
+            <Ionicons name="arrow-back" size={20} color={themeColors.text} />
           </Pressable>
           <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>Choose Your Squish</Text>
-            <Text style={styles.headerSubtitle}>What do you need help with?</Text>
+            <Text style={[styles.headerTitle, { color: themeColors.text }]}>Choose Your Squish</Text>
+            <Text style={[styles.headerSubtitle, { color: themeColors.textMuted }]}>What do you need help with?</Text>
           </View>
           <View style={styles.headerSpacer} />
         </View>
@@ -132,10 +138,11 @@ export default function AgentSelectionScreen() {
             key={agentType.id}
             config={agentType}
             onPress={() => handleSelectAgent(agentType)}
+            themeColors={themeColors}
           />
         ))}
 
-        <MoreComingCard />
+        <MoreComingCard themeColors={themeColors} />
       </ScrollView>
     </View>
   );
