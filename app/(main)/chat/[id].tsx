@@ -205,10 +205,13 @@ export default function ChatScreen() {
   const {
     messages,
     loading: messagesLoading,
+    loadingMore,
     sending,
     error: chatError,
+    hasMore,
     sendUserMessage,
     saveAssistantMessage,
+    loadMore,
     refetch,
   } = useChat(id);
   const { showError, showToast } = useToast();
@@ -717,7 +720,10 @@ export default function ChatScreen() {
         confirmMsg = "Got it! Your meal has been logged. Keep up the good work! 💪";
       }
 
-      await saveAssistantMessage(confirmMsg);
+      const { error: saveError } = await saveAssistantMessage(confirmMsg);
+      if (saveError) {
+        console.error('Failed to save confirmation message:', saveError);
+      }
 
       // Clear confirmed ID after animation
       setTimeout(() => setConfirmedMealId(null), 2000);
@@ -971,6 +977,29 @@ export default function ChatScreen() {
           <NoMessagesEmptyState />
         ) : (
           <>
+            {/* Load More Button */}
+            {hasMore && (
+              <Pressable
+                style={[
+                  styles.loadMoreButton,
+                  { backgroundColor: themeColors.surface },
+                  loadingMore && styles.loadMoreButtonDisabled,
+                ]}
+                onPress={loadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? (
+                  <ActivityIndicator size="small" color={themeColors.primary} />
+                ) : (
+                  <>
+                    <Ionicons name="chevron-up" size={16} color={themeColors.textMuted} />
+                    <Text style={[styles.loadMoreText, { color: themeColors.textMuted }]}>
+                      Load older messages
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            )}
             {messages.map((msg) => (
               <MessageBubble
                 key={msg.id}
@@ -986,24 +1015,17 @@ export default function ChatScreen() {
       </ScrollView>
 
       {/* Pending Meal Analysis Modal */}
-      <MealAnalysisBubble
-        visible={!!mealLogging.pendingMeal}
-        photoUrl={mealLogging.pendingMeal?.photoUrl || ''}
-        analysis={mealLogging.pendingMeal?.analysis || {
-          description: '',
-          mealType: 'snack',
-          calories: 0,
-          proteinG: 0,
-          carbsG: 0,
-          fatG: 0,
-          confidence: 'medium',
-          breakdown: [],
-        }}
-        onConfirm={handleConfirmMeal}
-        onCancel={handleCancelMeal}
-        isConfirming={mealLogging.saving}
-        isConfirmed={confirmedMealId === mealLogging.pendingMeal?.photoUrl}
-      />
+      {mealLogging.pendingMeal && (
+        <MealAnalysisBubble
+          visible={true}
+          photoUrl={mealLogging.pendingMeal.photoUrl}
+          analysis={mealLogging.pendingMeal.analysis}
+          onConfirm={handleConfirmMeal}
+          onCancel={handleCancelMeal}
+          isConfirming={mealLogging.saving}
+          isConfirmed={confirmedMealId === mealLogging.pendingMeal.photoUrl}
+        />
+      )}
 
       {/* Daily Progress after confirming meal, logging water, or logging workout */}
       {mealLogging.todayNutrition && (
@@ -1140,6 +1162,27 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: spacing.lg,
     fontSize: 16,
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+  },
+  // Load More Button
+  loadMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+  },
+  loadMoreButtonDisabled: {
+    opacity: 0.6,
+  },
+  loadMoreText: {
+    fontSize: 13,
     fontFamily: fonts.medium,
     color: colors.textMuted,
   },

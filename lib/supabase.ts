@@ -153,15 +153,31 @@ export const deleteAgent = async (agentId: string) => {
   return { error };
 };
 
-// Messages
-export const getMessages = async (agentId: string, limit = 50) => {
+// Messages - fetch newest messages, then reverse for chronological display
+export const getMessages = async (agentId: string, limit = 50, offset = 0) => {
   const { data, error } = await supabase
     .from('messages')
     .select('*')
     .eq('agent_id', agentId)
-    .order('created_at', { ascending: true })
-    .limit(limit);
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  // Reverse to get chronological order (oldest first for display)
+  if (data) {
+    data.reverse();
+  }
+
   return { data, error };
+};
+
+// Get total message count for an agent
+export const getMessageCount = async (agentId: string) => {
+  const { count, error } = await supabase
+    .from('messages')
+    .select('*', { count: 'exact', head: true })
+    .eq('agent_id', agentId);
+
+  return { count, error };
 };
 
 // Get the last message for an agent
