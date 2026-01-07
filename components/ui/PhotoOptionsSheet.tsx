@@ -1,4 +1,3 @@
-import { useState, useRef } from 'react';
 import { View, Text, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,9 +8,11 @@ import { useTheme } from '@/context/ThemeContext';
 
 interface PhotoOptionsSheetProps {
   visible: boolean;
-  onCamera: (notes?: string) => void | Promise<void>;
-  onLibrary: (notes?: string) => void | Promise<void>;
+  onCamera: () => void | Promise<void>;
+  onLibrary: () => void | Promise<void>;
   onClose: () => void;
+  notes: string;
+  onNotesChange: (notes: string) => void;
 }
 
 export function PhotoOptionsSheet({
@@ -19,27 +20,16 @@ export function PhotoOptionsSheet({
   onCamera,
   onLibrary,
   onClose,
+  notes,
+  onNotesChange,
 }: PhotoOptionsSheetProps) {
   const insets = useSafeAreaInsets();
   const { colors: themeColors } = useTheme();
-  const [notes, setNotes] = useState('');
-  // Use ref to preserve notes across re-renders when picker is open
-  const notesRef = useRef('');
-
-  // Update both state and ref when notes change
-  const handleNotesChange = (text: string) => {
-    setNotes(text);
-    notesRef.current = text;
-  };
 
   const handleCameraPress = async () => {
-    // Capture notes from ref (persists across re-renders)
-    const trimmedNotes = notesRef.current.trim() || undefined;
-    console.log('PhotoOptionsSheet: Camera pressed with notes:', trimmedNotes);
+    console.log('PhotoOptionsSheet: Camera pressed');
     try {
-      await onCamera(trimmedNotes);
-      setNotes('');
-      notesRef.current = '';
+      await onCamera();
       console.log('PhotoOptionsSheet: onCamera completed');
     } catch (err) {
       console.error('PhotoOptionsSheet: onCamera error:', err);
@@ -47,23 +37,13 @@ export function PhotoOptionsSheet({
   };
 
   const handleLibraryPress = async () => {
-    // Capture notes from ref (persists across re-renders)
-    const trimmedNotes = notesRef.current.trim() || undefined;
-    console.log('PhotoOptionsSheet: Library pressed with notes:', trimmedNotes);
+    console.log('PhotoOptionsSheet: Library pressed');
     try {
-      await onLibrary(trimmedNotes);
-      setNotes('');
-      notesRef.current = '';
+      await onLibrary();
       console.log('PhotoOptionsSheet: onLibrary completed');
     } catch (err) {
       console.error('PhotoOptionsSheet: onLibrary error:', err);
     }
-  };
-
-  const handleClose = () => {
-    setNotes('');
-    notesRef.current = '';
-    onClose();
   };
 
   return (
@@ -71,9 +51,9 @@ export function PhotoOptionsSheet({
       transparent
       visible={visible}
       animationType="slide"
-      onRequestClose={handleClose}
+      onRequestClose={onClose}
     >
-      <Pressable style={styles.overlay} onPress={handleClose}>
+      <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable
           style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg, backgroundColor: themeColors.background }]}
           onPress={(e) => e.stopPropagation()}
@@ -92,7 +72,7 @@ export function PhotoOptionsSheet({
               placeholder="Add notes (optional): 'ate half', '200g chicken', 'no dressing'..."
               placeholderTextColor={themeColors.textMuted}
               value={notes}
-              onChangeText={handleNotesChange}
+              onChangeText={onNotesChange}
               multiline
               numberOfLines={2}
             />
@@ -146,7 +126,7 @@ export function PhotoOptionsSheet({
               { backgroundColor: themeColors.surface },
               pressed && { backgroundColor: `${themeColors.textMuted}20` },
             ]}
-            onPress={handleClose}
+            onPress={onClose}
           >
             <Text style={[styles.cancelText, { color: themeColors.textMuted }]}>Cancel</Text>
           </Pressable>

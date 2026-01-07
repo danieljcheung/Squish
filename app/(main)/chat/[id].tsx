@@ -326,6 +326,8 @@ export default function ChatScreen() {
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const [mealNotes, setMealNotes] = useState('');
+  const mealNotesRef = useRef(''); // Ref to preserve notes across picker lifecycle
   const [showWaterSheet, setShowWaterSheet] = useState(false);
   const [confirmedMealId, setConfirmedMealId] = useState<string | null>(null);
   const [showQuickActions, setShowQuickActions] = useState(false);
@@ -725,12 +727,18 @@ export default function ChatScreen() {
     handleSend(reply.text);
   };
 
-  // Handle taking a photo with camera
-  const handleTakePhoto = async (notes?: string) => {
-    console.log('handleTakePhoto START, notes:', notes);
-    // Don't close modal yet - let picker open on top of it
+  // Handle meal notes change - update both state and ref
+  const handleMealNotesChange = (text: string) => {
+    setMealNotes(text);
+    mealNotesRef.current = text;
+  };
 
-    console.log('Calling mealPhoto.takePhoto...');
+  // Handle taking a photo with camera
+  const handleTakePhoto = async () => {
+    // Capture notes from ref BEFORE picker opens (persists across re-renders)
+    const notes = mealNotesRef.current.trim() || undefined;
+    console.log('handleTakePhoto START, notes from ref:', notes);
+
     const photoUrl = await mealPhoto.takePhoto();
     console.log('takePhoto result:', photoUrl);
 
@@ -743,14 +751,18 @@ export default function ChatScreen() {
       showError(mealPhoto.error);
       mealPhoto.clearError();
     }
+
+    // Clear notes after processing
+    setMealNotes('');
+    mealNotesRef.current = '';
   };
 
   // Handle selecting from library
-  const handlePickFromLibrary = async (notes?: string) => {
-    console.log('handlePickFromLibrary START, notes:', notes);
-    // Don't close modal yet - let picker open on top of it
+  const handlePickFromLibrary = async () => {
+    // Capture notes from ref BEFORE picker opens (persists across re-renders)
+    const notes = mealNotesRef.current.trim() || undefined;
+    console.log('handlePickFromLibrary START, notes from ref:', notes);
 
-    console.log('Calling mealPhoto.pickFromLibrary...');
     const photoUrl = await mealPhoto.pickFromLibrary();
     console.log('pickFromLibrary result:', photoUrl);
 
@@ -763,6 +775,10 @@ export default function ChatScreen() {
       showError(mealPhoto.error);
       mealPhoto.clearError();
     }
+
+    // Clear notes after processing
+    setMealNotes('');
+    mealNotesRef.current = '';
   };
 
   // Process the captured/selected photo (URL is already uploaded)
@@ -1227,9 +1243,15 @@ export default function ChatScreen() {
       {/* Photo Options Sheet */}
       <PhotoOptionsSheet
         visible={showPhotoOptions}
-        onClose={() => setShowPhotoOptions(false)}
+        onClose={() => {
+          setShowPhotoOptions(false);
+          setMealNotes('');
+          mealNotesRef.current = '';
+        }}
         onCamera={handleTakePhoto}
         onLibrary={handlePickFromLibrary}
+        notes={mealNotes}
+        onNotesChange={handleMealNotesChange}
       />
 
       {/* Water Amount Sheet */}
