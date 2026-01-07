@@ -53,6 +53,9 @@ import { Message, Agent, WorkoutType, MealAnalysis } from '@/types';
 import { sendMessage as sendToClaudeAPI, generateGreeting } from '@/lib/claude';
 import { parseError, ErrorType } from '@/lib/errors';
 
+// DEBUG: Module loaded at this timestamp
+console.log('=== CHAT MODULE LOADED ===', new Date().toISOString());
+
 // Get slime size based on pixel size
 const getSlimeSize = (pixelSize: number): 'xs' | 'small' | 'medium' | 'large' => {
   if (pixelSize <= 48) return 'xs';
