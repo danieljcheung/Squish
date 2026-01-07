@@ -1,4 +1,5 @@
-import { View, Text, Pressable, StyleSheet, Modal } from 'react-native';
+import { useState } from 'react';
+import { View, Text, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/constants/colors';
@@ -8,8 +9,8 @@ import { useTheme } from '@/context/ThemeContext';
 
 interface PhotoOptionsSheetProps {
   visible: boolean;
-  onCamera: () => void | Promise<void>;
-  onLibrary: () => void | Promise<void>;
+  onCamera: (notes?: string) => void | Promise<void>;
+  onLibrary: (notes?: string) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -21,11 +22,13 @@ export function PhotoOptionsSheet({
 }: PhotoOptionsSheetProps) {
   const insets = useSafeAreaInsets();
   const { colors: themeColors } = useTheme();
+  const [notes, setNotes] = useState('');
 
   const handleCameraPress = async () => {
     console.log('PhotoOptionsSheet: Camera button pressed, calling onCamera...');
     try {
-      await onCamera();
+      await onCamera(notes.trim() || undefined);
+      setNotes(''); // Clear notes after use
       console.log('PhotoOptionsSheet: onCamera completed');
     } catch (err) {
       console.error('PhotoOptionsSheet: onCamera error:', err);
@@ -35,11 +38,17 @@ export function PhotoOptionsSheet({
   const handleLibraryPress = async () => {
     console.log('PhotoOptionsSheet: Library button pressed, calling onLibrary...');
     try {
-      await onLibrary();
+      await onLibrary(notes.trim() || undefined);
+      setNotes(''); // Clear notes after use
       console.log('PhotoOptionsSheet: onLibrary completed');
     } catch (err) {
       console.error('PhotoOptionsSheet: onLibrary error:', err);
     }
+  };
+
+  const handleClose = () => {
+    setNotes(''); // Clear notes on close
+    onClose();
   };
 
   return (
@@ -47,9 +56,9 @@ export function PhotoOptionsSheet({
       transparent
       visible={visible}
       animationType="slide"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
+      <Pressable style={styles.overlay} onPress={handleClose}>
         <Pressable
           style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg, backgroundColor: themeColors.background }]}
           onPress={(e) => e.stopPropagation()}
@@ -60,6 +69,19 @@ export function PhotoOptionsSheet({
           <Text style={[styles.subtitle, { color: themeColors.textMuted }]}>
             Take a photo of your meal for nutrition analysis
           </Text>
+
+          {/* Notes Input */}
+          <View style={[styles.notesContainer, { backgroundColor: themeColors.surface }]}>
+            <TextInput
+              style={[styles.notesInput, { color: themeColors.text }]}
+              placeholder="Add notes (optional): 'ate half', '200g chicken', 'no dressing'..."
+              placeholderTextColor={themeColors.textMuted}
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              numberOfLines={2}
+            />
+          </View>
 
           <View style={styles.optionsContainer}>
             <Pressable
@@ -109,7 +131,7 @@ export function PhotoOptionsSheet({
               { backgroundColor: themeColors.surface },
               pressed && { backgroundColor: `${themeColors.textMuted}20` },
             ]}
-            onPress={onClose}
+            onPress={handleClose}
           >
             <Text style={[styles.cancelText, { color: themeColors.textMuted }]}>Cancel</Text>
           </Pressable>
@@ -153,7 +175,20 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     color: colors.textMuted,
     textAlign: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  notesContainer: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  notesInput: {
+    fontSize: 14,
+    fontFamily: fonts.regular,
+    color: colors.text,
+    minHeight: 50,
+    textAlignVertical: 'top',
   },
   optionsContainer: {
     gap: spacing.md,

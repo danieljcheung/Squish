@@ -726,8 +726,8 @@ export default function ChatScreen() {
   };
 
   // Handle taking a photo with camera
-  const handleTakePhoto = async () => {
-    console.log('handleTakePhoto START');
+  const handleTakePhoto = async (notes?: string) => {
+    console.log('handleTakePhoto START, notes:', notes);
     // Don't close modal yet - let picker open on top of it
 
     console.log('Calling mealPhoto.takePhoto...');
@@ -738,7 +738,7 @@ export default function ChatScreen() {
     setShowPhotoOptions(false);
 
     if (photoUrl) {
-      await processMealPhoto(photoUrl);
+      await processMealPhoto(photoUrl, notes);
     } else if (mealPhoto.error) {
       showError(mealPhoto.error);
       mealPhoto.clearError();
@@ -746,8 +746,8 @@ export default function ChatScreen() {
   };
 
   // Handle selecting from library
-  const handlePickFromLibrary = async () => {
-    console.log('handlePickFromLibrary START');
+  const handlePickFromLibrary = async (notes?: string) => {
+    console.log('handlePickFromLibrary START, notes:', notes);
     // Don't close modal yet - let picker open on top of it
 
     console.log('Calling mealPhoto.pickFromLibrary...');
@@ -758,7 +758,7 @@ export default function ChatScreen() {
     setShowPhotoOptions(false);
 
     if (photoUrl) {
-      await processMealPhoto(photoUrl);
+      await processMealPhoto(photoUrl, notes);
     } else if (mealPhoto.error) {
       showError(mealPhoto.error);
       mealPhoto.clearError();
@@ -766,11 +766,11 @@ export default function ChatScreen() {
   };
 
   // Process the captured/selected photo (URL is already uploaded)
-  const processMealPhoto = async (photoUrl: string) => {
+  const processMealPhoto = async (photoUrl: string, notes?: string) => {
     if (!agent) return;
 
-    // Analyze the meal
-    const pending = await mealLogging.analyzeMeal(photoUrl);
+    // Analyze the meal with user notes
+    const pending = await mealLogging.analyzeMeal(photoUrl, notes);
     if (pending) {
       // Save structured meal analysis message as JSON
       const mealAnalysisMessage: MealAnalysisMessage = {

@@ -348,10 +348,22 @@ export function generateGreeting(agent: Agent): string {
 
 const MEAL_ANALYSIS_PROMPT = `You are a nutrition analysis assistant. Analyze the food in this image and estimate its nutritional content.
 
+CRITICAL: READ USER NOTES FIRST
+If the user provided notes, you MUST adjust your analysis accordingly:
+- "I only ate half" or "ate half" → Calculate macros for HALF the visible portion
+- "I ate X%" or "only had X%" → Calculate macros for that percentage
+- "This is Xg of [food]" → Use that exact weight, don't guess
+- "No dressing" / "didn't eat the bread" / "skipped the X" → EXCLUDE those items
+- "Double portion" / "ate two servings" → MULTIPLY estimate by 2
+- "Added X" / "with extra X" → INCLUDE that item even if not clearly visible
+- Any specific weight/amount mentioned → Use that instead of estimating
+
+Include a "noteAdjustment" field explaining how you adjusted for their notes.
+
 Identify:
 1. What foods you can see in the image
-2. Estimated portion sizes
-3. Nutritional estimates (be realistic, don't underestimate)
+2. Estimated portion sizes (ADJUSTED for user notes)
+3. Nutritional estimates (ADJUSTED for user notes)
 
 Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
 {
@@ -362,6 +374,7 @@ Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
   "carbsG": 40,
   "fatG": 15,
   "confidence": "high" | "medium" | "low",
+  "noteAdjustment": "Calculated for half portion as noted" | null,
   "breakdown": [
     {"item": "Grilled chicken breast", "calories": 200, "portion": "6 oz"},
     {"item": "Brown rice", "calories": 150, "portion": "1 cup"}
@@ -375,7 +388,8 @@ Be conservative with estimates. If the image is unclear or you can't identify fo
  */
 export async function analyzeMealPhoto(
   photoUrl: string,
-  agent: Agent
+  agent: Agent,
+  notes?: string
 ): Promise<{ analysis: MealAnalysis; message: string } | null> {
   if (!CLAUDE_API_KEY) {
     console.warn('Claude API key not configured');
@@ -388,6 +402,14 @@ export async function analyzeMealPhoto(
   const systemPrompt = `${MEAL_ANALYSIS_PROMPT}
 
 User's dietary restrictions: ${dietaryRestrictions}`;
+
+  // Build user message with notes if provided
+  let userText = 'Please analyze this meal and estimate its nutritional content.';
+  if (notes && notes.trim()) {
+    userText = `USER NOTES (READ FIRST AND ADJUST CALCULATIONS): "${notes.trim()}"
+
+Please analyze this meal and estimate its nutritional content, adjusting for my notes above.`;
+  }
 
   try {
     const response = await fetch(API_URL, {
@@ -414,7 +436,7 @@ User's dietary restrictions: ${dietaryRestrictions}`;
               },
               {
                 type: 'text',
-                text: 'Please analyze this meal and estimate its nutritional content.',
+                text: userText,
               },
             ],
           },
@@ -467,10 +489,14 @@ function generateMealAnalysisMessage(analysis: MealAnalysis, agent: Agent): stri
   const persona = agent.persona_json as Record<string, any>;
   const style = persona.style || 'balanced';
   const confidence = analysis.confidence;
+  const noteAdjustment = (analysis as any).noteAdjustment;
 
   let message = `I see **${analysis.description}**!`;
 
-  if (confidence === 'low') {
+  // Mention note adjustment if present
+  if (noteAdjustment) {
+    message += ` ${noteAdjustment}`;
+  } else if (confidence === 'low') {
     message += ' (I had some trouble seeing clearly, so this is my best estimate)';
   }
 

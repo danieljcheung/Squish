@@ -20,7 +20,7 @@ interface UseMealLoggingReturn {
   saving: boolean;
   error: string | null;
   todayNutrition: DailyNutrition | null;
-  analyzeMeal: (photoUrl: string) => Promise<PendingMeal | null>;
+  analyzeMeal: (photoUrl: string, notes?: string) => Promise<PendingMeal | null>;
   confirmMeal: (adjustedValues?: Partial<MealAnalysis>) => Promise<boolean>;
   cancelMeal: () => void;
   refreshTodayNutrition: () => Promise<void>;
@@ -49,7 +49,7 @@ export function useMealLogging(agent: Agent | null): UseMealLoggingReturn {
 
   // Analyze a meal photo
   const analyzeMeal = useCallback(
-    async (photoUrl: string): Promise<PendingMeal | null> => {
+    async (photoUrl: string, notes?: string): Promise<PendingMeal | null> => {
       if (!agent) {
         setError('No agent selected');
         return null;
@@ -59,7 +59,7 @@ export function useMealLogging(agent: Agent | null): UseMealLoggingReturn {
       setError(null);
 
       try {
-        const result = await analyzeMealPhoto(photoUrl, agent);
+        const result = await analyzeMealPhoto(photoUrl, agent, notes);
 
         if (!result) {
           setError('Failed to analyze meal. Please try again.');
