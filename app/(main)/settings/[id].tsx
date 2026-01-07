@@ -21,6 +21,7 @@ import { fonts } from '@/constants/fonts';
 import { spacing } from '@/constants/theme';
 import { useAgent } from '@/hooks/useAgent';
 import { useToast } from '@/context/ToastContext';
+import { useTheme } from '@/context/ThemeContext';
 import { BaseSlime, CoachSlime, Slime, SlimeColor, SlimeType } from '@/components/slime';
 import { AgentSettings, PersonaJson, DEFAULT_WATER_GOAL_ML, WATER_GLASS_ML } from '@/types';
 
@@ -159,6 +160,7 @@ const TimePicker = ({
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { colors: themeColors, isDarkMode } = useTheme();
   const { agent, loading, error, updateAgent, deleteAgent, refetch } = useAgent(id);
   const { showSuccess, showError, showToast } = useToast();
 
@@ -311,20 +313,20 @@ export default function SettingsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading settings...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}>
+        <ActivityIndicator size="large" color={themeColors.primary} />
+        <Text style={[styles.loadingText, { color: themeColors.textMuted }]}>Loading settings...</Text>
       </View>
     );
   }
 
   if (error || !agent) {
     return (
-      <View style={styles.errorContainer}>
+      <View style={[styles.errorContainer, { backgroundColor: themeColors.background }]}>
         <BaseSlime size={80} expression="sleepy" />
-        <Text style={styles.errorText}>Couldn't load settings</Text>
-        <Pressable style={styles.retryButton} onPress={refetch}>
-          <Text style={styles.retryButtonText}>Try Again</Text>
+        <Text style={[styles.errorText, { color: themeColors.text }]}>Couldn't load settings</Text>
+        <Pressable style={[styles.retryButton, { backgroundColor: themeColors.primary }]} onPress={refetch}>
+          <Text style={[styles.retryButtonText, { color: themeColors.text }]}>Try Again</Text>
         </Pressable>
       </View>
     );
@@ -332,31 +334,31 @@ export default function SettingsScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: themeColors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md, backgroundColor: `${themeColors.surface}F2` }]}>
         <Pressable
           onPress={() => {
             triggerHaptic();
             router.back();
           }}
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: themeColors.background }]}
         >
-          <Text style={styles.backButtonText}>‹</Text>
+          <Text style={[styles.backButtonText, { color: themeColors.text }]}>‹</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={[styles.headerTitle, { color: themeColors.text }]}>Settings</Text>
         <Pressable
-          style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}
+          style={[styles.saveButton, { backgroundColor: themeColors.primary }, !hasChanges && { backgroundColor: themeColors.background }]}
           onPress={handleSave}
           disabled={!hasChanges || isSaving}
         >
           {isSaving ? (
-            <ActivityIndicator size="small" color={colors.text} />
+            <ActivityIndicator size="small" color={themeColors.text} />
           ) : (
             <Text
-              style={[styles.saveButtonText, !hasChanges && styles.saveButtonTextDisabled]}
+              style={[styles.saveButtonText, { color: themeColors.text }, !hasChanges && { color: themeColors.textMuted }]}
             >
               Save
             </Text>
@@ -369,157 +371,182 @@ export default function SettingsScreen() {
         contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom + spacing['3xl'] }]}
       >
         {/* Agent Preview */}
-        <View style={styles.previewCard}>
+        <View style={[styles.previewCard, { backgroundColor: themeColors.surface }]}>
           <AvatarWithEdit agent={agent} />
-          <Text style={styles.previewName}>{name}</Text>
-          <Text style={styles.previewType}>
+          <Text style={[styles.previewName, { color: themeColors.text }]}>{name}</Text>
+          <Text style={[styles.previewType, { color: themeColors.textMuted }]}>
             {agent.type === 'fitness_coach' ? 'Fitness Coach' :
              agent.type.charAt(0).toUpperCase() + agent.type.slice(1).replace('_', ' ')}
           </Text>
         </View>
 
         {/* Name */}
-        <SectionHeader title="Coach Name" />
-        <View style={styles.card}>
+        <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>COACH NAME</Text>
+        <View style={[styles.card, { backgroundColor: themeColors.surface }]}>
           <TextInput
-            style={styles.nameInput}
+            style={[styles.nameInput, { color: themeColors.text }]}
             value={name}
             onChangeText={setName}
             placeholder="Enter coach name"
-            placeholderTextColor={colors.textLight}
+            placeholderTextColor={themeColors.textMuted}
             maxLength={20}
           />
         </View>
 
         {/* Coaching Style */}
-        <SectionHeader title="Coaching Style" />
-        <View style={styles.card}>
-          <StyleSelector selected={style} onSelect={setStyle} />
+        <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>COACHING STYLE</Text>
+        <View style={[styles.card, { backgroundColor: themeColors.surface }]}>
+          <View style={styles.styleSelector}>
+            {COACHING_STYLES.map((coachStyle) => (
+              <Pressable
+                key={coachStyle.id}
+                style={[
+                  styles.styleOption,
+                  { backgroundColor: themeColors.background },
+                  style === coachStyle.id && { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}15` },
+                ]}
+                onPress={() => setStyle(coachStyle.id)}
+              >
+                <Text style={styles.styleEmoji}>{coachStyle.emoji}</Text>
+                <Text style={[styles.styleLabel, { color: themeColors.text }]}>{coachStyle.label}</Text>
+                <Text style={[styles.styleDescription, { color: themeColors.textMuted }]}>{coachStyle.description}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         {/* Notifications */}
-        <SectionHeader title="Notifications" />
-        <View style={styles.card}>
-          <SettingRow
-            label="Enable Notifications"
-            description="Receive check-ins and reminders"
-          >
+        <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>NOTIFICATIONS</Text>
+        <View style={[styles.card, { backgroundColor: themeColors.surface }]}>
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: themeColors.text }]}>Enable Notifications</Text>
+              <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Receive check-ins and reminders</Text>
+            </View>
             <Switch
               value={notificationsEnabled}
               onValueChange={setNotificationsEnabled}
-              trackColor={{ false: colors.background, true: colors.primary }}
-              thumbColor={colors.surface}
-              ios_backgroundColor={colors.background}
+              trackColor={{ false: themeColors.background, true: themeColors.primary }}
+              thumbColor="#ffffff"
+              ios_backgroundColor={themeColors.background}
             />
-          </SettingRow>
+          </View>
 
           {notificationsEnabled && (
             <>
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
 
-              <SettingRow
-                label="Morning Check-in"
-                description="Daily motivation to start your day"
-              >
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Morning Check-in</Text>
+                  <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Daily motivation to start your day</Text>
+                </View>
                 <Switch
                   value={morningCheckinEnabled}
                   onValueChange={setMorningCheckinEnabled}
-                  trackColor={{ false: colors.background, true: colors.primary }}
-                  thumbColor={colors.surface}
-                  ios_backgroundColor={colors.background}
+                  trackColor={{ false: themeColors.background, true: themeColors.primary }}
+                  thumbColor="#ffffff"
+                  ios_backgroundColor={themeColors.background}
                 />
-              </SettingRow>
+              </View>
 
               {morningCheckinEnabled && (
                 <View style={styles.timePickerContainer}>
-                  <Text style={styles.timePickerLabel}>Check-in time</Text>
-                  <TimePicker
-                    hour={morningCheckinHour}
-                    minute={morningCheckinMinute}
-                    onChange={(h, m) => {
-                      setMorningCheckinHour(h);
-                      setMorningCheckinMinute(m);
-                    }}
-                  />
+                  <Text style={[styles.timePickerLabel, { color: themeColors.textMuted }]}>Check-in time</Text>
+                  <View style={[styles.timePicker, { backgroundColor: themeColors.background }]}>
+                    <Pressable style={[styles.timeButton, { backgroundColor: themeColors.surface }]} onPress={() => setMorningCheckinHour((h) => (h - 1 + 24) % 24)}>
+                      <Text style={[styles.timeButtonText, { color: themeColors.text }]}>-</Text>
+                    </Pressable>
+                    <Text style={[styles.timeDisplay, { color: themeColors.text }]}>
+                      {(morningCheckinHour % 12 || 12)}:{morningCheckinMinute.toString().padStart(2, '0')} {morningCheckinHour >= 12 ? 'PM' : 'AM'}
+                    </Text>
+                    <Pressable style={[styles.timeButton, { backgroundColor: themeColors.surface }]} onPress={() => setMorningCheckinHour((h) => (h + 1) % 24)}>
+                      <Text style={[styles.timeButtonText, { color: themeColors.text }]}>+</Text>
+                    </Pressable>
+                  </View>
                 </View>
               )}
 
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
 
-              <SettingRow
-                label="Meal Reminders"
-                description="Reminders for healthy eating"
-              >
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Meal Reminders</Text>
+                  <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Reminders for healthy eating</Text>
+                </View>
                 <Switch
                   value={mealReminders}
                   onValueChange={setMealReminders}
-                  trackColor={{ false: colors.background, true: colors.primary }}
-                  thumbColor={colors.surface}
-                  ios_backgroundColor={colors.background}
+                  trackColor={{ false: themeColors.background, true: themeColors.primary }}
+                  thumbColor="#ffffff"
+                  ios_backgroundColor={themeColors.background}
                 />
-              </SettingRow>
+              </View>
 
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
 
-              <SettingRow
-                label="Water Reminders"
-                description="Smart hydration reminders"
-              >
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Water Reminders</Text>
+                  <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Smart hydration reminders</Text>
+                </View>
                 <Switch
                   value={waterReminders}
                   onValueChange={setWaterReminders}
-                  trackColor={{ false: colors.background, true: colors.primary }}
-                  thumbColor={colors.surface}
-                  ios_backgroundColor={colors.background}
+                  trackColor={{ false: themeColors.background, true: themeColors.primary }}
+                  thumbColor="#ffffff"
+                  ios_backgroundColor={themeColors.background}
                 />
-              </SettingRow>
+              </View>
             </>
           )}
         </View>
 
         {/* Hydration */}
-        <SectionHeader title="Hydration" />
-        <View style={styles.card}>
-          <SettingRow
-            label="Daily Water Goal"
-            description={`${Math.round(waterGoalMl / WATER_GLASS_ML)} glasses (${waterGoalMl}ml)`}
-          >
-            <View style={styles.goalAdjuster}>
+        <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>HYDRATION</Text>
+        <View style={[styles.card, { backgroundColor: themeColors.surface }]}>
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: themeColors.text }]}>Daily Water Goal</Text>
+              <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>{Math.round(waterGoalMl / WATER_GLASS_ML)} glasses ({waterGoalMl}ml)</Text>
+            </View>
+            <View style={[styles.goalAdjuster, { backgroundColor: themeColors.background }]}>
               <Pressable
-                style={styles.goalButton}
+                style={[styles.goalButton, { backgroundColor: themeColors.surface }]}
                 onPress={() => setWaterGoalMl((prev) => Math.max(500, prev - 250))}
               >
-                <Text style={styles.goalButtonText}>-</Text>
+                <Text style={[styles.goalButtonText, { color: themeColors.text }]}>-</Text>
               </Pressable>
-              <Text style={styles.goalValue}>{waterGoalMl}ml</Text>
+              <Text style={[styles.goalValue, { color: themeColors.text }]}>{waterGoalMl}ml</Text>
               <Pressable
-                style={styles.goalButton}
+                style={[styles.goalButton, { backgroundColor: themeColors.surface }]}
                 onPress={() => setWaterGoalMl((prev) => Math.min(5000, prev + 250))}
               >
-                <Text style={styles.goalButtonText}>+</Text>
+                <Text style={[styles.goalButtonText, { color: themeColors.text }]}>+</Text>
               </Pressable>
             </View>
-          </SettingRow>
+          </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
 
-          <SettingRow
-            label="Show as Glasses"
-            description="Display water in glasses instead of ml"
-          >
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: themeColors.text }]}>Show as Glasses</Text>
+              <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Display water in glasses instead of ml</Text>
+            </View>
             <Switch
               value={showWaterAsGlasses}
               onValueChange={setShowWaterAsGlasses}
-              trackColor={{ false: colors.background, true: colors.primary }}
-              thumbColor={colors.surface}
-              ios_backgroundColor={colors.background}
+              trackColor={{ false: themeColors.background, true: themeColors.primary }}
+              thumbColor="#ffffff"
+              ios_backgroundColor={themeColors.background}
             />
-          </SettingRow>
+          </View>
         </View>
 
         {/* Danger Zone */}
-        <SectionHeader title="Danger Zone" />
-        <View style={[styles.card, styles.dangerCard]}>
+        <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>DANGER ZONE</Text>
+        <View style={[styles.card, styles.dangerCard, isDarkMode && { backgroundColor: '#2a1f1f', borderColor: '#4a2a2a' }]}>
           <Pressable
             style={styles.deleteButton}
             onPress={handleDelete}
@@ -530,7 +557,7 @@ export default function SettingsScreen() {
             ) : (
               <>
                 <Text style={styles.deleteButtonText}>Delete {name}</Text>
-                <Text style={styles.deleteDescription}>
+                <Text style={[styles.deleteDescription, { color: themeColors.textMuted }]}>
                   This will permanently delete your coach and all conversation history
                 </Text>
               </>

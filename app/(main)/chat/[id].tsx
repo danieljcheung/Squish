@@ -109,11 +109,11 @@ const MessageBubble = ({
           : [styles.agentBubble, { backgroundColor: themeColors.surface }],
         isError && styles.errorBubble,
       ]}>
-        <Text style={[styles.bubbleText, { color: themeColors.text }, isError && styles.errorText]}>
+        <Text style={[styles.bubbleText, { color: isUser ? '#101914' : themeColors.text }, isError && styles.errorText]}>
           {message.content}
         </Text>
         <View style={styles.bubbleFooter}>
-          <Text style={[styles.timestamp, { color: themeColors.textMuted }, isError && styles.errorTimestamp]}>
+          <Text style={[styles.timestamp, { color: isUser ? '#101914' : themeColors.textMuted, opacity: isUser ? 0.6 : 0.7 }, isError && styles.errorTimestamp]}>
             {new Date(message.created_at).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit'
@@ -121,7 +121,7 @@ const MessageBubble = ({
           </Text>
           {isError && onRetry && (
             <Pressable onPress={onRetry} style={[styles.retryButton, { backgroundColor: themeColors.primary }]}>
-              <Text style={[styles.retryText, { color: themeColors.text }]}>Retry</Text>
+              <Text style={[styles.retryText, { color: '#101914' }]}>Retry</Text>
             </Pressable>
           )}
         </View>

@@ -2,6 +2,7 @@ import { ScrollView, Pressable, Text, StyleSheet, View } from 'react-native';
 import { colors } from '@/constants/colors';
 import { fonts } from '@/constants/fonts';
 import { spacing } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
 
 export interface QuickReply {
   id: string;
@@ -14,10 +15,12 @@ interface QuickRepliesProps {
 }
 
 export function QuickReplies({ replies, onSelect }: QuickRepliesProps) {
+  const { colors: themeColors } = useTheme();
+
   if (replies.length === 0) return null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -28,11 +31,12 @@ export function QuickReplies({ replies, onSelect }: QuickRepliesProps) {
             key={reply.id}
             style={({ pressed }) => [
               styles.chip,
-              pressed && styles.chipPressed,
+              { backgroundColor: themeColors.surface },
+              pressed && { backgroundColor: themeColors.primary },
             ]}
             onPress={() => onSelect(reply)}
           >
-            <Text style={styles.chipText}>{reply.text}</Text>
+            <Text style={[styles.chipText, { color: themeColors.text }]}>{reply.text}</Text>
           </Pressable>
         ))}
       </ScrollView>

@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
 import { fonts } from '@/constants/fonts';
 import { spacing } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
 
 export interface QuickAction {
   id: string;
@@ -25,6 +26,8 @@ interface QuickActionsBarProps {
 const BAR_HEIGHT = 52;
 
 export function QuickActionsBar({ actions, visible = true }: QuickActionsBarProps) {
+  const { colors: themeColors } = useTheme();
+
   if (actions.length === 0) return null;
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -38,7 +41,7 @@ export function QuickActionsBar({ actions, visible = true }: QuickActionsBarProp
   }));
 
   return (
-    <Animated.View style={[styles.container, animatedStyle]}>
+    <Animated.View style={[styles.container, { backgroundColor: themeColors.surface }, animatedStyle]}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -49,14 +52,15 @@ export function QuickActionsBar({ actions, visible = true }: QuickActionsBarProp
             key={action.id}
             style={({ pressed }) => [
               styles.actionPill,
-              pressed && styles.actionPillPressed,
+              { backgroundColor: `${themeColors.primary}20` },
+              pressed && { backgroundColor: themeColors.primary },
             ]}
             onPress={action.onPress}
             onLongPress={action.onLongPress}
             delayLongPress={400}
           >
-            <Ionicons name={action.icon} size={16} color={colors.text} />
-            <Text style={styles.actionLabel}>{action.label}</Text>
+            <Ionicons name={action.icon} size={16} color={themeColors.text} />
+            <Text style={[styles.actionLabel, { color: themeColors.text }]}>{action.label}</Text>
           </Pressable>
         ))}
       </ScrollView>
