@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { colors } from '@/constants/colors';
 import { fonts } from '@/constants/fonts';
 import { spacing } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
 
 interface NumberInputProps {
   value: string;
@@ -28,6 +29,7 @@ export function NumberInput({
   unit,
   validation,
 }: NumberInputProps) {
+  const { colors: themeColors } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,22 +55,23 @@ export function NumberInput({
 
   return (
     <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <Text style={[styles.label, { color: themeColors.textMuted }]}>{label}</Text>}
 
       <View style={styles.inputRow}>
         <View
           style={[
             styles.inputWrapper,
-            isFocused && styles.inputWrapperFocused,
+            { backgroundColor: themeColors.surface },
+            isFocused && { borderColor: themeColors.primary },
             error && styles.inputWrapperError,
           ]}
         >
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: themeColors.text }]}
             value={value}
             onChangeText={handleChangeText}
             placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={themeColors.textMuted}
             keyboardType="numeric"
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
@@ -76,20 +79,21 @@ export function NumberInput({
         </View>
 
         {unit && (
-          <View style={styles.unitToggle}>
+          <View style={[styles.unitToggle, { backgroundColor: themeColors.surface }]}>
             {unit.options.map((option) => (
               <Pressable
                 key={option}
                 style={[
                   styles.unitButton,
-                  unit.selected === option && styles.unitButtonSelected,
+                  unit.selected === option && { backgroundColor: themeColors.primary },
                 ]}
                 onPress={() => unit.onSelect(option)}
               >
                 <Text
                   style={[
                     styles.unitButtonText,
-                    unit.selected === option && styles.unitButtonTextSelected,
+                    { color: themeColors.textMuted },
+                    unit.selected === option && { color: '#101914', fontFamily: fonts.bold },
                   ]}
                 >
                   {option}
@@ -107,7 +111,7 @@ export function NumberInput({
 
 const styles = StyleSheet.create({
   container: {
-    width: '100%',
+    flex: 1,
   },
   label: {
     fontSize: 14,

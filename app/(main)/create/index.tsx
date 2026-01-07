@@ -227,7 +227,11 @@ const ChatBubble = ({
             ? [styles.userBubble, { backgroundColor: themeColors.primary }]
             : [styles.botBubble, { backgroundColor: themeColors.surface }]
         ]}>
-          <Text style={[styles.bubbleText, { color: themeColors.text }, isUser && styles.userBubbleText]}>
+          <Text style={[
+            styles.bubbleText,
+            { color: isUser ? '#101914' : themeColors.text },
+            isUser && styles.userBubbleText
+          ]}>
             {text}
           </Text>
         </View>
@@ -839,8 +843,8 @@ export default function CreateAgentScreen() {
     return (
       <KeyboardAvoidingView
         style={[styles.container, { backgroundColor: themeColors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={100}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + spacing.lg, backgroundColor: themeColors.background }]}>
@@ -925,8 +929,8 @@ export default function CreateAgentScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: themeColors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={100}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.lg, backgroundColor: themeColors.background }]}>
@@ -968,7 +972,7 @@ export default function CreateAgentScreen() {
 
       {/* Input area */}
       {showOptions && (
-        <View style={[styles.inputArea, { backgroundColor: themeColors.surface, borderTopColor: themeColors.background }]}>
+        <View style={[styles.inputArea, { backgroundColor: themeColors.surface, borderTopColor: themeColors.background, paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
           {currentQ.type === 'choice' && currentQ.options ? (
             <View style={styles.optionsContainer}>
               {currentQ.options.map((option, index) => (
@@ -1010,7 +1014,7 @@ export default function CreateAgentScreen() {
                 ]}
                 onPress={handleNumberSubmit}
               >
-                <Ionicons name="send" size={24} color={themeColors.text} />
+                <Ionicons name="send" size={24} color={numberInput.trim() ? '#101914' : themeColors.textMuted} />
               </Pressable>
             </View>
           ) : (
@@ -1043,7 +1047,7 @@ export default function CreateAgentScreen() {
                 ]}
                 onPress={handleTextSubmit}
               >
-                <Ionicons name="send" size={24} color={themeColors.text} />
+                <Ionicons name="send" size={24} color={textInput.trim() ? '#101914' : themeColors.textMuted} />
               </Pressable>
             </View>
           )}
