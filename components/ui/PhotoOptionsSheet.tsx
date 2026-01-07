@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/constants/colors';
 import { fonts } from '@/constants/fonts';
 import { spacing } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
 
 interface PhotoOptionsSheetProps {
   visible: boolean;
@@ -19,6 +20,7 @@ export function PhotoOptionsSheet({
   onClose,
 }: PhotoOptionsSheetProps) {
   const insets = useSafeAreaInsets();
+  const { colors: themeColors } = useTheme();
 
   const handleCameraPress = async () => {
     console.log('PhotoOptionsSheet: Camera button pressed, calling onCamera...');
@@ -49,13 +51,13 @@ export function PhotoOptionsSheet({
     >
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable
-          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
+          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg, backgroundColor: themeColors.background }]}
           onPress={(e) => e.stopPropagation()}
         >
-          <View style={styles.handle} />
+          <View style={[styles.handle, { backgroundColor: themeColors.textMuted }]} />
 
-          <Text style={styles.title}>Log a Meal</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: themeColors.text }]}>Log a Meal</Text>
+          <Text style={[styles.subtitle, { color: themeColors.textMuted }]}>
             Take a photo of your meal for nutrition analysis
           </Text>
 
@@ -63,50 +65,53 @@ export function PhotoOptionsSheet({
             <Pressable
               style={({ pressed }) => [
                 styles.option,
-                pressed && styles.optionPressed,
+                { backgroundColor: themeColors.surface },
+                pressed && { backgroundColor: themeColors.primary, transform: [{ scale: 0.98 }] },
               ]}
               onPress={handleCameraPress}
             >
-              <View style={styles.optionIcon}>
-                <Ionicons name="camera" size={28} color={colors.text} />
+              <View style={[styles.optionIcon, { backgroundColor: `${themeColors.primary}40` }]}>
+                <Ionicons name="camera" size={28} color={themeColors.text} />
               </View>
               <View style={styles.optionContent}>
-                <Text style={styles.optionTitle}>Take Photo</Text>
-                <Text style={styles.optionDescription}>
+                <Text style={[styles.optionTitle, { color: themeColors.text }]}>Take Photo</Text>
+                <Text style={[styles.optionDescription, { color: themeColors.textMuted }]}>
                   Use your camera to capture the meal
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={20} color={themeColors.textMuted} />
             </Pressable>
 
             <Pressable
               style={({ pressed }) => [
                 styles.option,
-                pressed && styles.optionPressed,
+                { backgroundColor: themeColors.surface },
+                pressed && { backgroundColor: themeColors.primary, transform: [{ scale: 0.98 }] },
               ]}
               onPress={handleLibraryPress}
             >
-              <View style={styles.optionIcon}>
-                <Ionicons name="images" size={28} color={colors.text} />
+              <View style={[styles.optionIcon, { backgroundColor: `${themeColors.primary}40` }]}>
+                <Ionicons name="images" size={28} color={themeColors.text} />
               </View>
               <View style={styles.optionContent}>
-                <Text style={styles.optionTitle}>Choose from Library</Text>
-                <Text style={styles.optionDescription}>
+                <Text style={[styles.optionTitle, { color: themeColors.text }]}>Choose from Library</Text>
+                <Text style={[styles.optionDescription, { color: themeColors.textMuted }]}>
                   Select an existing photo
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={20} color={themeColors.textMuted} />
             </Pressable>
           </View>
 
           <Pressable
             style={({ pressed }) => [
               styles.cancelButton,
-              pressed && styles.cancelButtonPressed,
+              { backgroundColor: themeColors.surface },
+              pressed && { backgroundColor: `${themeColors.textMuted}20` },
             ]}
             onPress={onClose}
           >
-            <Text style={styles.cancelText}>Cancel</Text>
+            <Text style={[styles.cancelText, { color: themeColors.textMuted }]}>Cancel</Text>
           </Pressable>
         </Pressable>
       </Pressable>

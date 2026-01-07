@@ -10,6 +10,7 @@ import Animated, {
 import { colors } from '@/constants/colors';
 import { fonts } from '@/constants/fonts';
 import { spacing } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
 import { DailyNutrition, NutritionGoals, WATER_GLASS_ML, DEFAULT_WATER_GOAL_ML, WorkoutLog, WORKOUT_TYPE_INFO } from '@/types';
 
 interface DailyProgressCardProps {
@@ -30,6 +31,7 @@ export function DailyProgressCard({
   showWaterAsGlasses = true,
   todayWorkout,
 }: DailyProgressCardProps) {
+  const { colors: themeColors } = useTheme();
   const [isExpanded, setIsExpanded] = useState(false);
   const height = useSharedValue(COLLAPSED_HEIGHT);
   const rotation = useSharedValue(180);
@@ -88,36 +90,49 @@ export function DailyProgressCard({
     opacity: contentOpacity.value,
   }));
 
+  const hasWorkout = nutrition.workouts_count > 0 || todayWorkout;
+
   return (
-    <Animated.View style={[styles.container, containerStyle]}>
+    <Animated.View style={[styles.container, { backgroundColor: themeColors.surface }, containerStyle]}>
       {/* Collapsed Header - Always visible */}
       <Pressable style={styles.collapsedHeader} onPress={toggleExpanded}>
-        <View style={styles.collapsedLeft}>
+        {/* Left content - calories, water, workout */}
+        <View style={styles.collapsedContent}>
           <Text style={styles.fireEmoji}>🔥</Text>
-          <Text style={styles.collapsedCalories}>
+          <Text style={[styles.collapsedCalories, { color: themeColors.text }]}>
             {nutrition.total_calories}
           </Text>
-          <Text style={styles.collapsedTarget}>/ {targetCalories}</Text>
-          <View style={styles.collapsedDivider} />
+          <Text style={[styles.collapsedTarget, { color: themeColors.textMuted }]}>/ {targetCalories}</Text>
+
+          <View style={[styles.collapsedDivider, { backgroundColor: `${themeColors.textMuted}30` }]} />
+
           <Text style={styles.waterEmoji}>💧</Text>
           <Text style={styles.collapsedWater}>
             {showWaterAsGlasses ? waterGlasses : waterMl}
           </Text>
-          <Text style={styles.collapsedTarget}>
+          <Text style={[styles.collapsedTarget, { color: themeColors.textMuted }]}>
             / {showWaterAsGlasses ? waterGoalGlasses : waterGoalMl}
           </Text>
-          {(nutrition.workouts_count > 0 || todayWorkout) && (
+
+          {hasWorkout && (
             <>
-              <View style={styles.collapsedDivider} />
-              <Text style={styles.workoutCheck}>🏋️ ✓</Text>
+              <View style={[styles.collapsedDivider, { backgroundColor: `${themeColors.textMuted}30` }]} />
+              <Text style={styles.workoutCheck}>🏋️</Text>
+              <Ionicons name="checkmark" size={14} color="#4ade80" />
             </>
           )}
         </View>
-        <View style={styles.collapsedRight}>
+
+        {/* Chevron button - fixed on right */}
+        <Pressable
+          style={[styles.chevronButton, { backgroundColor: `${themeColors.textMuted}10` }]}
+          onPress={toggleExpanded}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Animated.View style={chevronStyle}>
-            <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
+            <Ionicons name="chevron-down" size={18} color={themeColors.textMuted} />
           </Animated.View>
-        </View>
+        </Pressable>
       </Pressable>
 
       {/* Expanded Content - macros + workout */}
@@ -130,6 +145,7 @@ export function DailyProgressCard({
             unit="g"
             percent={proteinPercent}
             color="#4ECDC4"
+            themeColors={themeColors}
           />
           <MacroBar
             label="Carbs"
@@ -138,6 +154,7 @@ export function DailyProgressCard({
             unit="g"
             percent={carbsPercent}
             color="#FFE66D"
+            themeColors={themeColors}
           />
           <MacroBar
             label="Fat"
@@ -146,23 +163,24 @@ export function DailyProgressCard({
             unit="g"
             percent={fatPercent}
             color="#A78BFA"
+            themeColors={themeColors}
           />
         </View>
 
         {/* Workout info */}
-        <View style={styles.workoutRow}>
-          <Text style={styles.workoutLabel}>Workout</Text>
+        <View style={[styles.workoutRow, { borderTopColor: themeColors.background }]}>
+          <Text style={[styles.workoutLabel, { color: themeColors.text }]}>Workout</Text>
           {todayWorkout ? (
-            <Text style={styles.workoutValue}>
+            <Text style={[styles.workoutValue, { color: themeColors.text }]}>
               {todayWorkout.duration_mins} min {WORKOUT_TYPE_INFO[todayWorkout.workout_type].label.toLowerCase()}{' '}
               {WORKOUT_TYPE_INFO[todayWorkout.workout_type].emoji}
             </Text>
           ) : nutrition.workouts_count > 0 ? (
-            <Text style={styles.workoutValue}>
+            <Text style={[styles.workoutValue, { color: themeColors.text }]}>
               {nutrition.workout_mins} min total 💪
             </Text>
           ) : (
-            <Text style={styles.workoutNone}>None yet</Text>
+            <Text style={[styles.workoutNone, { color: themeColors.textMuted }]}>None yet</Text>
           )}
         </View>
       </Animated.View>
@@ -177,6 +195,7 @@ function MacroBar({
   unit,
   percent,
   color,
+  themeColors,
 }: {
   label: string;
   current: number;
@@ -184,17 +203,18 @@ function MacroBar({
   unit: string;
   percent: number;
   color: string;
+  themeColors: { text: string; textMuted: string; background: string };
 }) {
   return (
     <View style={styles.macroBar}>
       <View style={styles.macroBarHeader}>
-        <Text style={styles.macroBarLabel}>{label}</Text>
-        <Text style={styles.macroBarValue}>
+        <Text style={[styles.macroBarLabel, { color: themeColors.text }]}>{label}</Text>
+        <Text style={[styles.macroBarValue, { color: themeColors.text }]}>
           {current}
-          <Text style={styles.macroBarTarget}> / {target}{unit}</Text>
+          <Text style={[styles.macroBarTarget, { color: themeColors.textMuted }]}> / {target}{unit}</Text>
         </Text>
       </View>
-      <View style={styles.macroBarTrack}>
+      <View style={[styles.macroBarTrack, { backgroundColor: themeColors.background }]}>
         <View
           style={[
             styles.macroBarFill,
@@ -226,12 +246,14 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.lg,
     paddingRight: spacing.md,
     height: COLLAPSED_HEIGHT,
+    gap: spacing.md,
   },
-  collapsedLeft: {
+  collapsedContent: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
+    marginRight: spacing.sm,
   },
   fireEmoji: {
     fontSize: 18,
@@ -250,7 +272,7 @@ const styles = StyleSheet.create({
     width: 1,
     height: 16,
     backgroundColor: `${colors.textMuted}30`,
-    marginHorizontal: spacing.sm,
+    marginHorizontal: spacing.xs,
   },
   waterEmoji: {
     fontSize: 14,
@@ -263,23 +285,13 @@ const styles = StyleSheet.create({
   workoutCheck: {
     fontSize: 14,
   },
-  collapsedRight: {
-    flexShrink: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  chevronButton: {
     width: 32,
     height: 32,
-    marginLeft: spacing.sm,
-  },
-  mealCountBadge: {
-    fontSize: 12,
-    fontFamily: fonts.semiBold,
-    color: colors.textMuted,
-    backgroundColor: `${colors.primary}20`,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 12,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   // Expanded content
   expandedContent: {

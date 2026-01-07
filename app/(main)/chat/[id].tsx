@@ -44,11 +44,12 @@ import { NoMessagesEmptyState, ChatSkeleton, ErrorState } from '@/components/ui'
 import { PhotoOptionsSheet } from '@/components/ui/PhotoOptionsSheet';
 import { WaterAmountSheet } from '@/components/ui/WaterAmountSheet';
 import { MealAnalysisBubble } from '@/components/chat/MealAnalysisBubble';
+import { MealAnalysisCard } from '@/components/chat/MealAnalysisCard';
 import { DailyProgressCard } from '@/components/chat/DailyProgressCard';
 import { QuickActionsBar, QuickAction } from '@/components/chat/QuickActionsBar';
 import { QuickReplies, QuickReply, getContextualReplies } from '@/components/chat/QuickReplies';
 import { WeeklySummaryCard } from '@/components/chat/WeeklySummaryCard';
-import { Message, Agent, WorkoutType } from '@/types';
+import { Message, Agent, WorkoutType, MealAnalysis } from '@/types';
 import { sendMessage as sendToClaudeAPI, generateGreeting } from '@/lib/claude';
 import { parseError, ErrorType } from '@/lib/errors';
 
@@ -58,6 +59,26 @@ const getSlimeSize = (pixelSize: number): 'xs' | 'small' | 'medium' | 'large' =>
   if (pixelSize <= 80) return 'small';
   if (pixelSize <= 120) return 'medium';
   return 'large';
+};
+
+// Meal analysis message data structure
+interface MealAnalysisMessage {
+  type: 'meal_analysis';
+  photoUrl: string;
+  analysis: MealAnalysis;
+}
+
+// Helper to parse meal analysis from message content
+const parseMealAnalysis = (content: string): MealAnalysisMessage | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'meal_analysis' && parsed.photoUrl && parsed.analysis) {
+      return parsed as MealAnalysisMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 };
 
 // Agent slime using unified component
@@ -89,6 +110,32 @@ const MessageBubble = ({
 }) => {
   const { colors: themeColors, isDarkMode } = useTheme();
   const isUser = message.role === 'user';
+
+  // Check if this is a meal analysis message
+  const mealAnalysis = !isUser ? parseMealAnalysis(message.content) : null;
+
+  // Render meal analysis card for assistant messages
+  if (mealAnalysis) {
+    return (
+      <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+        <View style={styles.avatarSmall}>
+          <AgentSlime agent={agent} size={32} />
+        </View>
+        <View style={styles.mealAnalysisWrapper}>
+          <MealAnalysisCard
+            photoUrl={mealAnalysis.photoUrl}
+            analysis={mealAnalysis.analysis}
+          />
+          <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View
@@ -191,6 +238,49 @@ const TypingIndicator = ({ agent }: { agent?: Agent | null }) => {
           <RNAnimated.View style={[styles.dot, { backgroundColor: themeColors.textMuted }, getDotStyle(dot2Anim)]} />
           <RNAnimated.View style={[styles.dot, { backgroundColor: themeColors.textMuted }, getDotStyle(dot3Anim)]} />
         </View>
+      </View>
+    </View>
+  );
+};
+
+// Analyzing indicator for meal photo processing
+const AnalyzingIndicator = ({ agent }: { agent?: Agent | null }) => {
+  const { colors: themeColors } = useTheme();
+  const spinAnim = useRef(new RNAnimated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = RNAnimated.loop(
+      RNAnimated.timing(spinAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      })
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [spinAnim]);
+
+  const spinStyle = {
+    transform: [{
+      rotate: spinAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0deg', '360deg'],
+      }),
+    }],
+  };
+
+  return (
+    <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+      <View style={styles.avatarSmall}>
+        <AgentSlime agent={agent} size={32} />
+      </View>
+      <View style={[styles.bubble, styles.agentBubble, styles.analyzingBubble, { backgroundColor: themeColors.surface }]}>
+        <RNAnimated.View style={spinStyle}>
+          <Ionicons name="sparkles" size={18} color={themeColors.primary} />
+        </RNAnimated.View>
+        <Text style={[styles.analyzingText, { color: themeColors.text }]}>
+          Analyzing your meal...
+        </Text>
       </View>
     </View>
   );
@@ -682,8 +772,13 @@ export default function ChatScreen() {
     // Analyze the meal
     const pending = await mealLogging.analyzeMeal(photoUrl);
     if (pending) {
-      // Add the analysis message to chat
-      await saveAssistantMessage(pending.message);
+      // Save structured meal analysis message as JSON
+      const mealAnalysisMessage: MealAnalysisMessage = {
+        type: 'meal_analysis',
+        photoUrl: pending.photoUrl,
+        analysis: pending.analysis,
+      };
+      await saveAssistantMessage(JSON.stringify(mealAnalysisMessage));
       await triggerHaptic('success');
     } else {
       showError('Failed to analyze meal. Please try again.');
@@ -1010,6 +1105,7 @@ export default function ChatScreen() {
               />
             ))}
             {isTyping && <TypingIndicator agent={agent} />}
+            {mealLogging.analyzing && <AnalyzingIndicator agent={agent} />}
           </>
         )}
       </ScrollView>
@@ -1280,6 +1376,14 @@ const styles = StyleSheet.create({
   avatarSmall: {
     marginRight: spacing.sm,
   },
+  // Meal analysis card wrapper
+  mealAnalysisWrapper: {
+    maxWidth: '85%',
+  },
+  cardTimestamp: {
+    marginTop: spacing.xs,
+    textAlign: 'right',
+  },
   // Message bubbles - rounded-2xl with soft shadows
   bubble: {
     maxWidth: '78%',
@@ -1363,6 +1467,19 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.textMuted,
     marginHorizontal: 3,
+  },
+  // Analyzing indicator
+  analyzingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  analyzingText: {
+    fontSize: 14,
+    fontFamily: fonts.medium,
+    color: colors.text,
   },
   // Input area - white card with subtle shadow
   inputContainer: {

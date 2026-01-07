@@ -132,7 +132,22 @@ export function getContextualReplies(lastAgentMessage: string | undefined): Quic
     }
   }
 
-  // Ready to log meals
+  // Meal logged confirmation - check this BEFORE the "ready to log" pattern
+  if (
+    (message.includes('logged') && (message.includes('meal') || message.includes('food'))) ||
+    message.includes('has been logged') ||
+    message.includes('great job logging') ||
+    message.startsWith('logged!') ||
+    message.includes('keep fueling')
+  ) {
+    return [
+      { id: 'meal-logged-thanks', text: 'Thanks!' },
+      { id: 'meal-logged-another', text: 'Log another meal' },
+      { id: 'meal-logged-progress', text: "How's my day going?" },
+    ];
+  }
+
+  // Ready to log meals (asking if user wants to log)
   if (message.includes('log') && (message.includes('meal') || message.includes('food'))) {
     return [
       { id: 'log-yes', text: 'Yes!' },
@@ -192,7 +207,16 @@ export function getContextualReplies(lastAgentMessage: string | undefined): Quic
   }
 
   // Motivation offered
-  if (message.includes('you got this') || message.includes('keep going') || message.includes('proud of you')) {
+  if (
+    message.includes('you got this') ||
+    message.includes('keep going') ||
+    message.includes('keep up') ||
+    message.includes('keep it up') ||
+    message.includes('proud of you') ||
+    message.includes('great job') ||
+    message.includes('well done') ||
+    message.includes('stay on track')
+  ) {
     return [
       { id: 'thanks', text: 'Thanks!' },
       { id: 'motivated', text: "Let's go!" },
