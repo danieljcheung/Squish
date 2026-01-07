@@ -21,7 +21,7 @@ interface DailyProgressCardProps {
 }
 
 const COLLAPSED_HEIGHT = 48;
-const EXPANDED_HEIGHT = 200;
+const EXPANDED_HEIGHT = 240;
 
 export function DailyProgressCard({
   nutrition,
@@ -32,7 +32,7 @@ export function DailyProgressCard({
 }: DailyProgressCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const height = useSharedValue(COLLAPSED_HEIGHT);
-  const rotation = useSharedValue(0);
+  const rotation = useSharedValue(180);
   const contentOpacity = useSharedValue(0);
 
   const targetCalories = goals?.calories || nutrition.target_calories || 2000;
@@ -68,7 +68,7 @@ export function DailyProgressCard({
       duration: 200,
       easing: Easing.bezier(0.25, 0.1, 0.25, 1),
     });
-    rotation.value = withTiming(toExpanded ? 180 : 0, {
+    rotation.value = withTiming(toExpanded ? 0 : 180, {
       duration: 200,
     });
     contentOpacity.value = withTiming(toExpanded ? 1 : 0, {
@@ -223,10 +223,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.md,
     height: COLLAPSED_HEIGHT,
   },
   collapsedLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -262,9 +264,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   collapsedRight: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    marginLeft: spacing.sm,
   },
   mealCountBadge: {
     fontSize: 12,
@@ -278,7 +284,7 @@ const styles = StyleSheet.create({
   // Expanded content
   expandedContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   macroGrid: {
     gap: spacing.md,
@@ -324,8 +330,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
     paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
     borderTopWidth: 1,
     borderTopColor: colors.background,
   },
