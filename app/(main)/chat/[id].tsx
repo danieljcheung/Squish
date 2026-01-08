@@ -53,9 +53,6 @@ import { Message, Agent, WorkoutType, MealAnalysis } from '@/types';
 import { sendMessage as sendToClaudeAPI, generateGreeting } from '@/lib/claude';
 import { parseError, ErrorType } from '@/lib/errors';
 
-// DEBUG: Module loaded at this timestamp
-console.log('=== CHAT MODULE LOADED ===', new Date().toISOString());
-
 // Get slime size based on pixel size
 const getSlimeSize = (pixelSize: number): 'xs' | 'small' | 'medium' | 'large' => {
   if (pixelSize <= 48) return 'xs';
@@ -69,6 +66,7 @@ interface MealAnalysisMessage {
   type: 'meal_analysis';
   photoUrl: string;
   analysis: MealAnalysis;
+  notes?: string;
 }
 
 // Helper to parse meal analysis from message content
@@ -128,6 +126,7 @@ const MessageBubble = ({
           <MealAnalysisCard
             photoUrl={mealAnalysis.photoUrl}
             analysis={mealAnalysis.analysis}
+            notes={mealAnalysis.notes}
           />
           <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
             {new Date(message.created_at).toLocaleTimeString([], {
@@ -329,8 +328,6 @@ export default function ChatScreen() {
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
-  const [mealNotes, setMealNotes] = useState('');
-  const mealNotesRef = useRef(''); // Ref to preserve notes across picker lifecycle
   const [showWaterSheet, setShowWaterSheet] = useState(false);
   const [confirmedMealId, setConfirmedMealId] = useState<string | null>(null);
   const [showQuickActions, setShowQuickActions] = useState(false);
@@ -730,74 +727,44 @@ export default function ChatScreen() {
     handleSend(reply.text);
   };
 
-  // Handle meal notes change - update both state and ref
-  const handleMealNotesChange = (text: string) => {
-    setMealNotes(text);
-    mealNotesRef.current = text;
-  };
-
   // Handle taking a photo with camera
   const handleTakePhoto = async () => {
-    // Capture notes from ref BEFORE picker opens (persists across re-renders)
-    const notes = mealNotesRef.current.trim() || undefined;
-    console.log('handleTakePhoto START, notes from ref:', notes);
-
     const photoUrl = await mealPhoto.takePhoto();
-    console.log('takePhoto result:', photoUrl);
 
     // Close modal after picker returns
     setShowPhotoOptions(false);
 
     if (photoUrl) {
-      await processMealPhoto(photoUrl, notes);
+      await processMealPhoto(photoUrl);
     } else if (mealPhoto.error) {
       showError(mealPhoto.error);
       mealPhoto.clearError();
     }
-
-    // Clear notes after processing
-    setMealNotes('');
-    mealNotesRef.current = '';
   };
 
   // Handle selecting from library
   const handlePickFromLibrary = async () => {
-    // Capture notes from ref BEFORE picker opens (persists across re-renders)
-    const notes = mealNotesRef.current.trim() || undefined;
-    console.log('handlePickFromLibrary START, notes from ref:', notes);
-
     const photoUrl = await mealPhoto.pickFromLibrary();
-    console.log('pickFromLibrary result:', photoUrl);
 
     // Close modal after picker returns
     setShowPhotoOptions(false);
 
     if (photoUrl) {
-      await processMealPhoto(photoUrl, notes);
+      await processMealPhoto(photoUrl);
     } else if (mealPhoto.error) {
       showError(mealPhoto.error);
       mealPhoto.clearError();
     }
-
-    // Clear notes after processing
-    setMealNotes('');
-    mealNotesRef.current = '';
   };
 
   // Process the captured/selected photo (URL is already uploaded)
-  const processMealPhoto = async (photoUrl: string, notes?: string) => {
+  const processMealPhoto = async (photoUrl: string) => {
     if (!agent) return;
 
-    // Analyze the meal with user notes
-    const pending = await mealLogging.analyzeMeal(photoUrl, notes);
+    // Analyze the meal (notes will be added in the confirmation modal)
+    // The analysis is shown in MealAnalysisBubble modal, saved to chat only when confirmed
+    const pending = await mealLogging.analyzeMeal(photoUrl);
     if (pending) {
-      // Save structured meal analysis message as JSON
-      const mealAnalysisMessage: MealAnalysisMessage = {
-        type: 'meal_analysis',
-        photoUrl: pending.photoUrl,
-        analysis: pending.analysis,
-      };
-      await saveAssistantMessage(JSON.stringify(mealAnalysisMessage));
       await triggerHaptic('success');
     } else {
       showError('Failed to analyze meal. Please try again.');
@@ -805,14 +772,17 @@ export default function ChatScreen() {
     }
   };
 
-  // Handle confirming a meal
-  const handleConfirmMeal = async (context?: string) => {
-    await triggerHaptic('medium');
-    const success = await mealLogging.confirmMeal(context ? { notes: context } : undefined);
+  // Handle confirming a meal (re-analyzes with notes if provided)
+  const handleConfirmMeal = async (notes?: string) => {
+    // Capture photoUrl before confirmMeal clears pendingMeal
+    const photoUrl = mealLogging.pendingMeal?.photoUrl;
 
-    if (success) {
+    await triggerHaptic('medium');
+    const result = await mealLogging.confirmMeal(notes);
+
+    if (result.success && result.finalAnalysis && photoUrl) {
       // Set confirmed ID for UI feedback
-      setConfirmedMealId(mealLogging.pendingMeal?.photoUrl || null);
+      setConfirmedMealId(photoUrl);
 
       await triggerHaptic('success');
       showToast({
@@ -821,7 +791,16 @@ export default function ChatScreen() {
         duration: 2000,
       });
 
-      // Add confirmation message to chat
+      // Save the final meal analysis card with notes to chat
+      const mealAnalysisMessage: MealAnalysisMessage = {
+        type: 'meal_analysis',
+        photoUrl,
+        analysis: result.finalAnalysis,
+        notes: result.notes,
+      };
+      await saveAssistantMessage(JSON.stringify(mealAnalysisMessage));
+
+      // Add a short confirmation message
       const persona = agent?.persona_json as Record<string, any>;
       const style = persona?.style || 'balanced';
       let confirmMsg = '';
@@ -829,9 +808,9 @@ export default function ChatScreen() {
       if (style === 'tough_love') {
         confirmMsg = "Logged! Keep fueling right and stay on track! 💪";
       } else if (style === 'gentle') {
-        confirmMsg = "Great job logging your meal! Every entry helps us track your progress together. 🌟";
+        confirmMsg = "Great job logging your meal! 🌟";
       } else {
-        confirmMsg = "Got it! Your meal has been logged. Keep up the good work! 💪";
+        confirmMsg = "Got it! Your meal has been logged. 💪";
       }
 
       const { error: saveError } = await saveAssistantMessage(confirmMsg);
@@ -1246,15 +1225,9 @@ export default function ChatScreen() {
       {/* Photo Options Sheet */}
       <PhotoOptionsSheet
         visible={showPhotoOptions}
-        onClose={() => {
-          setShowPhotoOptions(false);
-          setMealNotes('');
-          mealNotesRef.current = '';
-        }}
+        onClose={() => setShowPhotoOptions(false)}
         onCamera={handleTakePhoto}
         onLibrary={handlePickFromLibrary}
-        notes={mealNotes}
-        onNotesChange={handleMealNotesChange}
       />
 
       {/* Water Amount Sheet */}

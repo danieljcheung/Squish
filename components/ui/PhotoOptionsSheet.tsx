@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/constants/colors';
@@ -11,8 +11,6 @@ interface PhotoOptionsSheetProps {
   onCamera: () => void | Promise<void>;
   onLibrary: () => void | Promise<void>;
   onClose: () => void;
-  notes: string;
-  onNotesChange: (notes: string) => void;
 }
 
 export function PhotoOptionsSheet({
@@ -20,8 +18,6 @@ export function PhotoOptionsSheet({
   onCamera,
   onLibrary,
   onClose,
-  notes,
-  onNotesChange,
 }: PhotoOptionsSheetProps) {
   const insets = useSafeAreaInsets();
   const { colors: themeColors } = useTheme();
@@ -64,19 +60,6 @@ export function PhotoOptionsSheet({
           <Text style={[styles.subtitle, { color: themeColors.textMuted }]}>
             Take a photo of your meal for nutrition analysis
           </Text>
-
-          {/* Notes Input */}
-          <View style={[styles.notesContainer, { backgroundColor: themeColors.surface }]}>
-            <TextInput
-              style={[styles.notesInput, { color: themeColors.text }]}
-              placeholder="Add notes (optional): 'ate half', '200g chicken', 'no dressing'..."
-              placeholderTextColor={themeColors.textMuted}
-              value={notes}
-              onChangeText={onNotesChange}
-              multiline
-              numberOfLines={2}
-            />
-          </View>
 
           <View style={styles.optionsContainer}>
             <Pressable
@@ -171,19 +154,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginBottom: spacing.lg,
-  },
-  notesContainer: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  notesInput: {
-    fontSize: 14,
-    fontFamily: fonts.regular,
-    color: colors.text,
-    minHeight: 50,
-    textAlignVertical: 'top',
   },
   optionsContainer: {
     gap: spacing.md,

@@ -348,17 +348,33 @@ export function generateGreeting(agent: Agent): string {
 
 const MEAL_ANALYSIS_PROMPT = `You are a nutrition analysis assistant. Analyze the food in this image and estimate its nutritional content.
 
-CRITICAL: READ USER NOTES FIRST
-If the user provided notes, you MUST adjust your analysis accordingly:
-- "I only ate half" or "ate half" → Calculate macros for HALF the visible portion
-- "I ate X%" or "only had X%" → Calculate macros for that percentage
-- "This is Xg of [food]" → Use that exact weight, don't guess
-- "No dressing" / "didn't eat the bread" / "skipped the X" → EXCLUDE those items
-- "Double portion" / "ate two servings" → MULTIPLY estimate by 2
-- "Added X" / "with extra X" → INCLUDE that item even if not clearly visible
-- Any specific weight/amount mentioned → Use that instead of estimating
+CRITICAL: READ USER NOTES FIRST - DO THE MATH!
+If the user provided notes, you MUST adjust your analysis with CORRECT MATH:
 
-Include a "noteAdjustment" field explaining how you adjusted for their notes.
+QUANTITY MULTIPLIERS (apply multiplication):
+- "I ate 2 slices/pieces/servings" → If image shows 1, MULTIPLY all values by 2
+- "I ate 3 of these" → MULTIPLY all values by 3
+- "Had X portions" → MULTIPLY by X
+- "Double portion" / "ate two servings" → MULTIPLY by 2
+- EXAMPLE: Image shows 1 slice = 200 cal. User says "ate 2 slices" → 200 × 2 = 400 cal
+
+QUANTITY REDUCERS (apply division/percentage):
+- "I only ate half" or "ate half" → DIVIDE all values by 2
+- "I ate X%" or "only had X%" → Calculate macros for that percentage
+- "Ate 1 of 2 pieces shown" → DIVIDE by 2
+- EXAMPLE: Image shows 400 cal total. User says "ate half" → 400 ÷ 2 = 200 cal
+
+EXCLUSIONS:
+- "No dressing" / "didn't eat the bread" / "skipped the X" → SUBTRACT those items
+- "Without the sauce" → EXCLUDE sauce calories
+
+ADDITIONS:
+- "Added X" / "with extra X" → ADD that item even if not clearly visible
+
+SPECIFIC AMOUNTS:
+- "This is Xg of [food]" → Use that exact weight for calculation
+
+Include a "noteAdjustment" field explaining EXACTLY what math you did (e.g., "Multiplied by 2 for 2 slices: 200 × 2 = 400 cal").
 
 Identify:
 1. What foods you can see in the image
@@ -396,9 +412,6 @@ export async function analyzeMealPhoto(
     return null;
   }
 
-  // Log notes for debugging
-  console.log('analyzeMealPhoto called with notes:', notes);
-
   const persona = agent.persona_json as Record<string, any>;
   const dietaryRestrictions = persona.dietaryRestrictions || 'None specified';
 
@@ -422,8 +435,6 @@ You MUST factor these notes into your calculations. The noteAdjustment field is 
 
 Please analyze this meal photo and adjust your nutritional estimates based on my notes. You MUST include a noteAdjustment field explaining how you adjusted for my notes.`;
   }
-
-  console.log('Sending to Claude with userText:', userText);
 
   try {
     const response = await fetch(API_URL, {
@@ -476,14 +487,11 @@ Please analyze this meal photo and adjust your nutritional estimates based on my
     let analysis: MealAnalysis;
     try {
       // Try to extract JSON from the response (in case there's extra text)
-      console.log('Claude raw response:', textContent.text);
       const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error('No JSON found in response');
       }
       analysis = JSON.parse(jsonMatch[0]);
-      console.log('Parsed analysis:', JSON.stringify(analysis, null, 2));
-      console.log('noteAdjustment field:', (analysis as any).noteAdjustment);
     } catch (parseError) {
       console.error('Failed to parse meal analysis:', parseError);
       return null;

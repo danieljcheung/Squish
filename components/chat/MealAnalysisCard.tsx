@@ -9,10 +9,12 @@ import { MealAnalysis } from '@/types';
 interface MealAnalysisCardProps {
   photoUrl: string;
   analysis: MealAnalysis;
+  notes?: string;
 }
 
-export function MealAnalysisCard({ photoUrl, analysis }: MealAnalysisCardProps) {
+export function MealAnalysisCard({ photoUrl, analysis, notes }: MealAnalysisCardProps) {
   const { colors: themeColors } = useTheme();
+  const noteAdjustment = (analysis as any).noteAdjustment;
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.surface }]}>
@@ -26,8 +28,25 @@ export function MealAnalysisCard({ photoUrl, analysis }: MealAnalysisCardProps) 
           {analysis.description}
         </Text>
 
+        {/* User note if provided */}
+        {notes && (
+          <View style={[styles.noteContainer, { backgroundColor: `${themeColors.primary}15` }]}>
+            <Ionicons name="chatbubble-ellipses-outline" size={12} color={themeColors.primary} />
+            <Text style={[styles.noteText, { color: themeColors.text }]}>
+              "{notes}"
+            </Text>
+          </View>
+        )}
+
+        {/* Note adjustment explanation */}
+        {noteAdjustment && (
+          <Text style={[styles.adjustmentText, { color: themeColors.textMuted }]}>
+            {noteAdjustment}
+          </Text>
+        )}
+
         {/* Confidence indicator */}
-        {analysis.confidence !== 'high' && (
+        {analysis.confidence !== 'high' && !noteAdjustment && (
           <Text style={[styles.confidenceNote, { color: themeColors.textMuted }]}>
             {analysis.confidence === 'low' ? '* Best estimate' : '* Estimated values'}
           </Text>
@@ -146,6 +165,27 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: fonts.regular,
     color: colors.textMuted,
+    fontStyle: 'italic',
+    marginBottom: spacing.sm,
+  },
+  noteContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 8,
+    marginBottom: spacing.xs,
+  },
+  noteText: {
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    fontStyle: 'italic',
+    flex: 1,
+  },
+  adjustmentText: {
+    fontSize: 11,
+    fontFamily: fonts.regular,
     fontStyle: 'italic',
     marginBottom: spacing.sm,
   },

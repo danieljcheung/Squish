@@ -251,22 +251,21 @@ export function MealAnalysisBubble({
                       borderColor: keyboardVisible ? themeColors.primary : 'transparent',
                     },
                   ]}
-                  placeholder="e.g., post-workout meal, ate half..."
+                  placeholder="e.g., 'ate half', '200g chicken', 'no dressing'"
                   placeholderTextColor={themeColors.textMuted}
                   value={mealContext}
                   onChangeText={setMealContext}
                   multiline
-                  numberOfLines={2}
                   maxLength={200}
-                  textAlignVertical="top"
                   returnKeyType="done"
-                  blurOnSubmit={true}
+                  blurOnSubmit
                   onSubmitEditing={() => Keyboard.dismiss()}
                 />
                 <Text style={[styles.charCount, { color: themeColors.textMuted }]}>
                   {mealContext.length}/200
                 </Text>
               </View>
+
             </View>
           </ScrollView>
 

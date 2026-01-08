@@ -14,6 +14,12 @@ interface PendingMeal {
   message: string;
 }
 
+interface ConfirmMealResult {
+  success: boolean;
+  finalAnalysis?: MealAnalysis;
+  notes?: string;
+}
+
 interface UseMealLoggingReturn {
   pendingMeal: PendingMeal | null;
   analyzing: boolean;
@@ -21,7 +27,7 @@ interface UseMealLoggingReturn {
   error: string | null;
   todayNutrition: DailyNutrition | null;
   analyzeMeal: (photoUrl: string, notes?: string) => Promise<PendingMeal | null>;
-  confirmMeal: (adjustedValues?: Partial<MealAnalysis>) => Promise<boolean>;
+  confirmMeal: (notes?: string) => Promise<ConfirmMealResult>;
   cancelMeal: () => void;
   refreshTodayNutrition: () => Promise<void>;
 }
@@ -50,8 +56,6 @@ export function useMealLogging(agent: Agent | null): UseMealLoggingReturn {
   // Analyze a meal photo
   const analyzeMeal = useCallback(
     async (photoUrl: string, notes?: string): Promise<PendingMeal | null> => {
-      console.log('useMealLogging.analyzeMeal called with notes:', notes);
-
       if (!agent) {
         setError('No agent selected');
         return null;
@@ -86,21 +90,32 @@ export function useMealLogging(agent: Agent | null): UseMealLoggingReturn {
     [agent]
   );
 
-  // Confirm and save the meal
+  // Confirm and save the meal (re-analyzes with notes if provided)
   const confirmMeal = useCallback(
-    async (adjustedValues?: Partial<MealAnalysis>): Promise<boolean> => {
+    async (notes?: string): Promise<ConfirmMealResult> => {
       if (!agent || !pendingMeal) {
         setError('No meal to confirm');
-        return false;
+        return { success: false };
       }
 
       setSaving(true);
       setError(null);
 
-      // Merge any adjusted values
-      const finalAnalysis: MealAnalysis = adjustedValues
-        ? { ...pendingMeal.analysis, ...adjustedValues }
-        : pendingMeal.analysis;
+      let finalAnalysis: MealAnalysis = pendingMeal.analysis;
+      const trimmedNotes = notes?.trim() || undefined;
+
+      // If notes are provided, re-analyze the photo with notes
+      if (trimmedNotes) {
+        try {
+          const result = await analyzeMealPhoto(pendingMeal.photoUrl, agent, trimmedNotes);
+          if (result) {
+            finalAnalysis = result.analysis;
+          }
+        } catch (err) {
+          console.error('Failed to re-analyze with notes, using original:', err);
+          // Continue with original analysis if re-analysis fails
+        }
+      }
 
       try {
         // Create the meal log entry
@@ -122,7 +137,7 @@ export function useMealLogging(agent: Agent | null): UseMealLoggingReturn {
         if (mealError) {
           console.error('Failed to create meal log:', mealError);
           setError('Failed to save meal');
-          return false;
+          return { success: false };
         }
 
         // Update daily nutrition
@@ -144,11 +159,15 @@ export function useMealLogging(agent: Agent | null): UseMealLoggingReturn {
 
         // Clear pending meal
         setPendingMeal(null);
-        return true;
+        return {
+          success: true,
+          finalAnalysis,
+          notes: trimmedNotes
+        };
       } catch (err) {
         console.error('Failed to confirm meal:', err);
         setError('Failed to save meal');
-        return false;
+        return { success: false };
       } finally {
         setSaving(false);
       }
