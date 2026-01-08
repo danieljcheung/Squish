@@ -323,7 +323,7 @@ export default function SettingsScreen() {
 
   const handleDelete = () => {
     Alert.alert(
-      'Delete Coach',
+      'Delete Squish',
       `Are you sure you want to delete ${name}? This will also delete all your conversation history. This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -425,20 +425,20 @@ export default function SettingsScreen() {
         </View>
 
         {/* Name */}
-        <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>COACH NAME</Text>
+        <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>NAME</Text>
         <View style={[styles.card, { backgroundColor: themeColors.surface }]}>
           <TextInput
             style={[styles.nameInput, { color: themeColors.text }]}
             value={name}
             onChangeText={setName}
-            placeholder="Enter coach name"
+            placeholder="Enter name"
             placeholderTextColor={themeColors.textMuted}
             maxLength={20}
           />
         </View>
 
-        {/* Coaching Style */}
-        <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>COACHING STYLE</Text>
+        {/* Personality */}
+        <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>PERSONALITY</Text>
         <View style={[styles.card, { backgroundColor: themeColors.surface }]}>
           <View style={styles.styleSelector}>
             {COACHING_STYLES.map((coachStyle) => (
@@ -698,7 +698,7 @@ export default function SettingsScreen() {
               <>
                 <Text style={styles.deleteButtonText}>Delete {name}</Text>
                 <Text style={[styles.deleteDescription, { color: themeColors.textMuted }]}>
-                  This will permanently delete your coach and all conversation history
+                  This will permanently delete this Squish and all conversation history
                 </Text>
               </>
             )}
