@@ -20,7 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useAgents, AgentWithLastMessage } from '@/hooks/useAgent';
 import { useToast } from '@/context/ToastContext';
-import { Slime, SlimeColor, SlimeType } from '@/components/slime';
+import { Slime, ProfileSlime, SlimeColor, SlimeType } from '@/components/slime';
 
 // Helper to format relative time
 const formatRelativeTime = (dateString: string | undefined): string => {
@@ -65,7 +65,7 @@ const HeroSlime = () => (
   </View>
 );
 
-// Agent avatar using unified Slime component
+// Agent avatar using ProfileSlime with circular accent background
 const AgentAvatar = ({
   type,
   slimeColor = 'mint',
@@ -77,9 +77,7 @@ const AgentAvatar = ({
 }) => {
   return (
     <View style={styles.avatarContainer}>
-      <View style={styles.avatarBg}>
-        <Slime color={slimeColor} type={type} size="xs" animated={false} />
-      </View>
+      <ProfileSlime color={slimeColor} type={type} size={48} animated={false} />
       <View style={[styles.statusDot, { backgroundColor: isOnline ? '#4ade80' : '#d1d5db' }]} />
     </View>
   );

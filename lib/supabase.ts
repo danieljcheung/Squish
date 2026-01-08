@@ -809,6 +809,715 @@ export const getMealLogsForDateRange = async (
 };
 
 // ============================================
+// FINANCE TRACKING
+// ============================================
+
+export interface ExpenseInsert {
+  agent_id: string;
+  amount: number;
+  currency?: string;
+  category?: string;
+  description?: string;
+}
+
+export interface IncomeInsert {
+  agent_id: string;
+  amount: number;
+  currency?: string;
+  category?: string;
+  description?: string;
+}
+
+export interface SavingsGoalInsert {
+  agent_id: string;
+  name: string;
+  icon?: string;
+  target_amount: number;
+  target_date?: string;
+  auto_allocate_percentage?: number;
+}
+
+export interface WishlistItemInsert {
+  agent_id: string;
+  name: string;
+  estimated_cost: number;
+  notes?: string;
+}
+
+// Create an expense entry
+export const createExpense = async (expense: ExpenseInsert) => {
+  const { data, error } = await supabase
+    .from('expenses')
+    .insert(expense)
+    .select()
+    .single();
+  return { data, error };
+};
+
+// Get expenses for today
+export const getTodayExpenses = async (agentId: string) => {
+  const today = new Date().toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('expenses')
+    .select('*')
+    .eq('agent_id', agentId)
+    .eq('expense_date', today)
+    .order('created_at', { ascending: false });
+
+  return { data, error };
+};
+
+// Get expenses for this month
+export const getMonthExpenses = async (agentId: string) => {
+  const today = new Date();
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+    .toISOString()
+    .split('T')[0];
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    .toISOString()
+    .split('T')[0];
+
+  const { data, error } = await supabase
+    .from('expenses')
+    .select('*')
+    .eq('agent_id', agentId)
+    .gte('expense_date', startOfMonth)
+    .lte('expense_date', endOfMonth)
+    .order('expense_date', { ascending: false });
+
+  return { data, error };
+};
+
+// Get expenses by category for month
+export const getMonthExpensesByCategory = async (agentId: string) => {
+  const { data, error } = await getMonthExpenses(agentId);
+
+  if (error || !data) return { data: null, error };
+
+  // Group by category
+  const byCategory: Record<string, number> = {};
+  for (const expense of data) {
+    const cat = expense.category || 'other';
+    byCategory[cat] = (byCategory[cat] || 0) + parseFloat(expense.amount);
+  }
+
+  return { data: byCategory, error: null };
+};
+
+// Get expenses for a specific category this month
+export const getCategoryExpenses = async (agentId: string, category: string) => {
+  const today = new Date();
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+    .toISOString()
+    .split('T')[0];
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    .toISOString()
+    .split('T')[0];
+
+  const { data, error } = await supabase
+    .from('expenses')
+    .select('*')
+    .eq('agent_id', agentId)
+    .eq('category', category)
+    .gte('expense_date', startOfMonth)
+    .lte('expense_date', endOfMonth)
+    .order('expense_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  return { data, error };
+};
+
+// Get expenses for this week (Monday to Sunday)
+export const getWeekExpenses = async (agentId: string) => {
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  // Calculate Monday of current week (0 = Sunday, so adjust)
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() + mondayOffset);
+  const startOfWeekStr = startOfWeek.toISOString().split('T')[0];
+
+  // Sunday is end of week
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  const endOfWeekStr = endOfWeek.toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('expenses')
+    .select('*')
+    .eq('agent_id', agentId)
+    .gte('expense_date', startOfWeekStr)
+    .lte('expense_date', endOfWeekStr)
+    .order('expense_date', { ascending: false });
+
+  return { data, error };
+};
+
+// Get income for this week (Monday to Sunday)
+export const getWeekIncome = async (agentId: string) => {
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() + mondayOffset);
+  const startOfWeekStr = startOfWeek.toISOString().split('T')[0];
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  const endOfWeekStr = endOfWeek.toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('income')
+    .select('*')
+    .eq('agent_id', agentId)
+    .gte('income_date', startOfWeekStr)
+    .lte('income_date', endOfWeekStr)
+    .order('income_date', { ascending: false });
+
+  return { data, error };
+};
+
+// Create an income entry
+export const createIncome = async (income: IncomeInsert) => {
+  const { data, error } = await supabase
+    .from('income')
+    .insert(income)
+    .select()
+    .single();
+  return { data, error };
+};
+
+// Get income for this month
+export const getMonthIncome = async (agentId: string) => {
+  const today = new Date();
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+    .toISOString()
+    .split('T')[0];
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    .toISOString()
+    .split('T')[0];
+
+  const { data, error } = await supabase
+    .from('income')
+    .select('*')
+    .eq('agent_id', agentId)
+    .gte('income_date', startOfMonth)
+    .lte('income_date', endOfMonth)
+    .order('income_date', { ascending: false });
+
+  return { data, error };
+};
+
+// Get today's finance summary
+export const getTodayFinance = async (agentId: string) => {
+  const today = new Date().toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('daily_finance')
+    .select('*')
+    .eq('agent_id', agentId)
+    .eq('date', today)
+    .single();
+
+  return { data, error };
+};
+
+// Get savings goals (limit to 5 active)
+export const getSavingsGoals = async (agentId: string) => {
+  const { data, error } = await supabase
+    .from('savings_goals')
+    .select('*')
+    .eq('agent_id', agentId)
+    .is('completed_at', null)
+    .order('created_at', { ascending: true })
+    .limit(5);
+
+  return { data, error };
+};
+
+// Create a savings goal
+export const createSavingsGoal = async (goal: SavingsGoalInsert) => {
+  // Check if user already has 5 active goals
+  const { data: existing } = await getSavingsGoals(goal.agent_id);
+  if (existing && existing.length >= 5) {
+    return { data: null, error: new Error('Maximum 5 active savings goals allowed') };
+  }
+
+  const { data, error } = await supabase
+    .from('savings_goals')
+    .insert(goal)
+    .select()
+    .single();
+  return { data, error };
+};
+
+// Update savings goal (add contribution)
+export const updateSavingsGoal = async (
+  goalId: string,
+  updates: { current_amount?: number; auto_allocate_percentage?: number }
+) => {
+  const { data, error } = await supabase
+    .from('savings_goals')
+    .update(updates)
+    .eq('id', goalId)
+    .select()
+    .single();
+  return { data, error };
+};
+
+// Add contribution to a savings goal
+export const addSavingsContribution = async (goalId: string, amount: number) => {
+  // First get current goal
+  const { data: goal, error: goalError } = await supabase
+    .from('savings_goals')
+    .select('*')
+    .eq('id', goalId)
+    .single();
+
+  if (goalError || !goal) {
+    return { data: null, error: goalError || new Error('Goal not found') };
+  }
+
+  const newAmount = parseFloat(goal.current_amount) + amount;
+  const updates: Record<string, unknown> = { current_amount: newAmount };
+
+  // Check if goal is now complete
+  if (newAmount >= parseFloat(goal.target_amount)) {
+    updates.completed_at = new Date().toISOString();
+  }
+
+  const { data, error } = await supabase
+    .from('savings_goals')
+    .update(updates)
+    .eq('id', goalId)
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// Update savings goal details
+export const updateSavingsGoalDetails = async (
+  goalId: string,
+  updates: { name?: string; icon?: string; target_amount?: number; target_date?: string | null }
+) => {
+  const { data, error } = await supabase
+    .from('savings_goals')
+    .update(updates)
+    .eq('id', goalId)
+    .select()
+    .single();
+  return { data, error };
+};
+
+// Delete a savings goal
+export const deleteSavingsGoal = async (goalId: string) => {
+  const { error } = await supabase
+    .from('savings_goals')
+    .delete()
+    .eq('id', goalId);
+  return { error };
+};
+
+// Get wishlist items
+export const getWishlist = async (agentId: string) => {
+  const { data, error } = await supabase
+    .from('wishlist')
+    .select('*')
+    .eq('agent_id', agentId)
+    .order('created_at', { ascending: false });
+
+  return { data, error };
+};
+
+// Add wishlist item
+export const addWishlistItem = async (item: WishlistItemInsert) => {
+  const { data, error } = await supabase
+    .from('wishlist')
+    .insert(item)
+    .select()
+    .single();
+  return { data, error };
+};
+
+// Remove wishlist item
+export const removeWishlistItem = async (itemId: string) => {
+  const { error } = await supabase
+    .from('wishlist')
+    .delete()
+    .eq('id', itemId);
+  return { error };
+};
+
+// Get monthly budget summary
+export const getMonthlyBudgetSummary = async (agentId: string) => {
+  const [expensesResult, incomeResult] = await Promise.all([
+    getMonthExpenses(agentId),
+    getMonthIncome(agentId),
+  ]);
+
+  if (expensesResult.error || incomeResult.error) {
+    return {
+      data: null,
+      error: expensesResult.error || incomeResult.error,
+    };
+  }
+
+  const totalSpent = (expensesResult.data || []).reduce(
+    (sum, e) => sum + parseFloat(e.amount),
+    0
+  );
+  const totalIncome = (incomeResult.data || []).reduce(
+    (sum, i) => sum + parseFloat(i.amount),
+    0
+  );
+
+  // Group expenses by category
+  const byCategory: Record<string, number> = {};
+  for (const expense of expensesResult.data || []) {
+    const cat = expense.category || 'other';
+    byCategory[cat] = (byCategory[cat] || 0) + parseFloat(expense.amount);
+  }
+
+  return {
+    data: {
+      totalSpent,
+      totalIncome,
+      remaining: totalIncome - totalSpent,
+      expenseCount: expensesResult.data?.length || 0,
+      incomeCount: incomeResult.data?.length || 0,
+      byCategory,
+    },
+    error: null,
+  };
+};
+
+// Get weekly budget summary
+export const getWeeklyBudgetSummary = async (agentId: string) => {
+  const [expensesResult, incomeResult] = await Promise.all([
+    getWeekExpenses(agentId),
+    getWeekIncome(agentId),
+  ]);
+
+  if (expensesResult.error || incomeResult.error) {
+    return {
+      data: null,
+      error: expensesResult.error || incomeResult.error,
+    };
+  }
+
+  const totalSpent = (expensesResult.data || []).reduce(
+    (sum, e) => sum + parseFloat(e.amount),
+    0
+  );
+  const totalIncome = (incomeResult.data || []).reduce(
+    (sum, i) => sum + parseFloat(i.amount),
+    0
+  );
+
+  // Group expenses by category
+  const byCategory: Record<string, number> = {};
+  for (const expense of expensesResult.data || []) {
+    const cat = expense.category || 'other';
+    byCategory[cat] = (byCategory[cat] || 0) + parseFloat(expense.amount);
+  }
+
+  // Calculate daily average (days elapsed in week)
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const daysElapsed = dayOfWeek === 0 ? 7 : dayOfWeek; // Sunday = 7, Monday = 1, etc.
+  const dailyAverage = daysElapsed > 0 ? totalSpent / daysElapsed : 0;
+
+  return {
+    data: {
+      totalSpent,
+      totalIncome,
+      remaining: totalIncome - totalSpent,
+      expenseCount: expensesResult.data?.length || 0,
+      incomeCount: incomeResult.data?.length || 0,
+      byCategory,
+      dailyAverage,
+    },
+    error: null,
+  };
+};
+
+// ============================================
+// BILLS & SUBSCRIPTIONS
+// ============================================
+
+export type BillFrequency = 'weekly' | 'monthly' | 'yearly';
+
+export interface RecurringBillInsert {
+  agent_id: string;
+  name: string;
+  icon?: string;
+  amount: number;
+  currency?: string;
+  category?: string;
+  frequency: BillFrequency;
+  due_day: number; // Day of month (1-31), day of week (0-6 for weekly), or day of year
+  reminder_days_before?: number;
+  auto_log?: boolean;
+  is_subscription?: boolean;
+}
+
+export interface RecurringBillUpdate {
+  name?: string;
+  icon?: string;
+  amount?: number;
+  category?: string;
+  frequency?: BillFrequency;
+  due_day?: number;
+  reminder_days_before?: number;
+  auto_log?: boolean;
+  is_subscription?: boolean;
+  is_active?: boolean;
+  last_paid_date?: string;
+  next_due_date?: string;
+}
+
+// Calculate next due date based on frequency and due_day
+function calculateNextDueDate(frequency: BillFrequency, dueDay: number, fromDate?: Date): string {
+  const today = fromDate || new Date();
+  let nextDue: Date;
+
+  if (frequency === 'weekly') {
+    // dueDay is 0-6 (Sunday-Saturday)
+    const currentDay = today.getDay();
+    let daysUntil = dueDay - currentDay;
+    if (daysUntil <= 0) daysUntil += 7;
+    nextDue = new Date(today);
+    nextDue.setDate(today.getDate() + daysUntil);
+  } else if (frequency === 'monthly') {
+    // dueDay is 1-31
+    nextDue = new Date(today.getFullYear(), today.getMonth(), dueDay);
+    if (nextDue <= today) {
+      nextDue.setMonth(nextDue.getMonth() + 1);
+    }
+    // Handle months with fewer days
+    if (nextDue.getDate() !== dueDay) {
+      nextDue = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0);
+    }
+  } else {
+    // yearly - dueDay is encoded as MMDD (e.g., 315 = March 15, 1225 = December 25)
+    let month = 0; // January (0-indexed)
+    let day = dueDay;
+
+    if (dueDay > 100) {
+      // Decode MMDD format
+      month = Math.floor(dueDay / 100) - 1; // Convert to 0-indexed month
+      day = dueDay % 100;
+    }
+
+    nextDue = new Date(today.getFullYear(), month, day);
+    if (nextDue <= today) {
+      nextDue.setFullYear(nextDue.getFullYear() + 1);
+    }
+  }
+
+  return nextDue.toISOString().split('T')[0];
+}
+
+// Create a recurring bill
+export const createRecurringBill = async (bill: RecurringBillInsert) => {
+  const nextDueDate = calculateNextDueDate(bill.frequency, bill.due_day);
+
+  const { data, error } = await supabase
+    .from('recurring_bills')
+    .insert({
+      ...bill,
+      next_due_date: nextDueDate,
+    })
+    .select()
+    .single();
+  return { data, error };
+};
+
+// Get all active bills for an agent
+export const getRecurringBills = async (agentId: string) => {
+  const { data, error } = await supabase
+    .from('recurring_bills')
+    .select('*')
+    .eq('agent_id', agentId)
+    .eq('is_active', true)
+    .order('next_due_date', { ascending: true });
+  return { data, error };
+};
+
+// Get upcoming bills (due within N days)
+export const getUpcomingBills = async (agentId: string, daysAhead: number = 7) => {
+  const today = new Date();
+  const futureDate = new Date(today);
+  futureDate.setDate(today.getDate() + daysAhead);
+
+  const { data, error } = await supabase
+    .from('recurring_bills')
+    .select('*')
+    .eq('agent_id', agentId)
+    .eq('is_active', true)
+    .lte('next_due_date', futureDate.toISOString().split('T')[0])
+    .order('next_due_date', { ascending: true });
+  return { data, error };
+};
+
+// Get bills due today
+export const getBillsDueToday = async (agentId: string) => {
+  const today = new Date().toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('recurring_bills')
+    .select('*')
+    .eq('agent_id', agentId)
+    .eq('is_active', true)
+    .eq('next_due_date', today);
+  return { data, error };
+};
+
+// Update a bill
+export const updateRecurringBill = async (billId: string, updates: RecurringBillUpdate) => {
+  // If due_day or frequency changed, recalculate next_due_date
+  if (updates.due_day !== undefined || updates.frequency !== undefined) {
+    // Get current bill to fill in missing values
+    const { data: currentBill } = await supabase
+      .from('recurring_bills')
+      .select('frequency, due_day')
+      .eq('id', billId)
+      .single();
+
+    if (currentBill) {
+      const frequency = updates.frequency ?? currentBill.frequency;
+      const dueDay = updates.due_day ?? currentBill.due_day;
+      const nextDueDate = calculateNextDueDate(frequency, dueDay);
+      updates.next_due_date = nextDueDate;
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('recurring_bills')
+    .update(updates)
+    .eq('id', billId)
+    .select()
+    .single();
+  return { data, error };
+};
+
+// Mark bill as paid and update next due date
+export const markBillPaid = async (billId: string, paidDate?: string) => {
+  // First get the bill to calculate next due date
+  const { data: bill, error: billError } = await supabase
+    .from('recurring_bills')
+    .select('*')
+    .eq('id', billId)
+    .single();
+
+  if (billError || !bill) {
+    return { data: null, error: billError || new Error('Bill not found') };
+  }
+
+  const today = paidDate || new Date().toISOString().split('T')[0];
+  const nextDue = calculateNextDueDate(
+    bill.frequency,
+    bill.due_day,
+    new Date(bill.next_due_date)
+  );
+
+  // Move next_due_date forward
+  const { data, error } = await supabase
+    .from('recurring_bills')
+    .update({
+      last_paid_date: today,
+      next_due_date: nextDue,
+    })
+    .eq('id', billId)
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// Soft delete a bill (set inactive)
+export const deleteRecurringBill = async (billId: string) => {
+  const { error } = await supabase
+    .from('recurring_bills')
+    .update({ is_active: false })
+    .eq('id', billId);
+  return { error };
+};
+
+// Pause/unpause a bill
+export const toggleBillActive = async (billId: string, isActive: boolean) => {
+  const { data, error } = await supabase
+    .from('recurring_bills')
+    .update({ is_active: isActive })
+    .eq('id', billId)
+    .select()
+    .single();
+  return { data, error };
+};
+
+// Get bills that need reminders today
+export const getBillsNeedingReminder = async (agentId: string) => {
+  const today = new Date();
+  const bills: any[] = [];
+
+  // Get all active bills
+  const { data, error } = await getRecurringBills(agentId);
+  if (error || !data) return { data: null, error };
+
+  for (const bill of data) {
+    if (!bill.reminder_days_before || bill.reminder_days_before === 0) continue;
+
+    const dueDate = new Date(bill.next_due_date);
+    const reminderDate = new Date(dueDate);
+    reminderDate.setDate(dueDate.getDate() - bill.reminder_days_before);
+
+    // Check if today is the reminder day
+    if (reminderDate.toISOString().split('T')[0] === today.toISOString().split('T')[0]) {
+      bills.push(bill);
+    }
+  }
+
+  return { data: bills, error: null };
+};
+
+// Get total monthly bills amount
+export const getMonthlyBillsTotal = async (agentId: string) => {
+  const { data, error } = await getRecurringBills(agentId);
+  if (error || !data) return { data: null, error };
+
+  let monthlyTotal = 0;
+  for (const bill of data) {
+    if (bill.frequency === 'weekly') {
+      monthlyTotal += parseFloat(bill.amount) * 4.33; // Average weeks per month
+    } else if (bill.frequency === 'monthly') {
+      monthlyTotal += parseFloat(bill.amount);
+    } else if (bill.frequency === 'yearly') {
+      monthlyTotal += parseFloat(bill.amount) / 12;
+    }
+  }
+
+  const subscriptionsTotal = data
+    .filter(b => b.is_subscription)
+    .reduce((sum, b) => {
+      if (b.frequency === 'monthly') return sum + parseFloat(b.amount);
+      if (b.frequency === 'yearly') return sum + parseFloat(b.amount) / 12;
+      return sum;
+    }, 0);
+
+  return {
+    data: {
+      monthlyTotal,
+      subscriptionsTotal,
+      billsCount: data.length,
+      subscriptionsCount: data.filter(b => b.is_subscription).length,
+    },
+    error: null,
+  };
+};
+
+// ============================================
 // ACCOUNT MANAGEMENT
 // ============================================
 

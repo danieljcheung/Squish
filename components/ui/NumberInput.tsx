@@ -10,6 +10,7 @@ interface NumberInputProps {
   onChangeValue: (value: string) => void;
   placeholder?: string;
   label?: string;
+  prefix?: string;
   unit?: {
     options: string[];
     selected: string;
@@ -26,6 +27,7 @@ export function NumberInput({
   onChangeValue,
   placeholder,
   label,
+  prefix,
   unit,
   validation,
 }: NumberInputProps) {
@@ -66,16 +68,21 @@ export function NumberInput({
             error && styles.inputWrapperError,
           ]}
         >
-          <TextInput
-            style={[styles.input, { color: themeColors.text }]}
-            value={value}
-            onChangeText={handleChangeText}
-            placeholder={placeholder}
-            placeholderTextColor={themeColors.textMuted}
-            keyboardType="numeric"
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-          />
+          <View style={styles.inputInner}>
+            {prefix && (
+              <Text style={[styles.prefix, { color: themeColors.textMuted }]}>{prefix}</Text>
+            )}
+            <TextInput
+              style={[styles.input, { color: themeColors.text }, prefix && styles.inputWithPrefix]}
+              value={value}
+              onChangeText={handleChangeText}
+              placeholder={placeholder}
+              placeholderTextColor={themeColors.textMuted}
+              keyboardType="numeric"
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+            />
+          </View>
         </View>
 
         {unit && (
@@ -137,6 +144,16 @@ const styles = StyleSheet.create({
   inputWrapperError: {
     borderColor: '#FF6B6B',
   },
+  inputInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  prefix: {
+    fontSize: 18,
+    fontFamily: fonts.medium,
+    paddingLeft: spacing.xl,
+  },
   input: {
     fontSize: 18,
     fontFamily: fonts.medium,
@@ -144,6 +161,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.lg,
     textAlign: 'center',
+    flex: 1,
+  },
+  inputWithPrefix: {
+    paddingLeft: spacing.sm,
   },
   unitToggle: {
     flexDirection: 'row',

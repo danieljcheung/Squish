@@ -38,28 +38,37 @@ import { useMealPhoto } from '@/hooks/useMealPhoto';
 import { useWaterLogging } from '@/hooks/useWaterLogging';
 import { useWorkoutLogging, generateWorkoutConfirmation } from '@/hooks/useWorkoutLogging';
 import { useWeeklySummary, detectSummaryRequest } from '@/hooks/useWeeklySummary';
+import { useFinance } from '@/hooks/useFinance';
 import { useToast } from '@/context/ToastContext';
-import { Slime, SlimeColor, SlimeType } from '@/components/slime';
+import { Slime, ProfileSlime, SlimeColor, SlimeType } from '@/components/slime';
 import { NoMessagesEmptyState, ChatSkeleton, ErrorState } from '@/components/ui';
 import { PhotoOptionsSheet } from '@/components/ui/PhotoOptionsSheet';
 import { WaterAmountSheet } from '@/components/ui/WaterAmountSheet';
+import { LogExpenseSheet, EXPENSE_CATEGORIES } from '@/components/ui/LogExpenseSheet';
+import { AddIncomeSheet, INCOME_CATEGORIES } from '@/components/ui/AddIncomeSheet';
+import { LogActionSheet } from '@/components/ui/LogActionSheet';
+import { AddBillSheet } from '@/components/ui/AddBillSheet';
+import { EditBillSheet } from '@/components/ui/EditBillSheet';
+import { BillsCard } from '@/components/chat/BillsCard';
+import { FinanceSummaryCard } from '@/components/chat/FinanceSummaryCard';
+import { SavingsGoalsCard } from '@/components/chat/SavingsGoalsCard';
+import { LogConfirmationCard } from '@/components/chat/LogConfirmationCard';
+import { BudgetBreakdownCard } from '@/components/chat/BudgetBreakdownCard';
+import { CategoryExpensesSheet } from '@/components/ui/CategoryExpensesSheet';
+import { AddSavingsGoalSheet } from '@/components/ui/AddSavingsGoalSheet';
+import { EditSavingsGoalSheet } from '@/components/ui/EditSavingsGoalSheet';
+import { useBills, RecurringBill } from '@/hooks/useBills';
+import { getCategoryExpenses, createSavingsGoal, addSavingsContribution, updateSavingsGoalDetails, deleteSavingsGoal } from '@/lib/supabase';
 import { MealAnalysisBubble } from '@/components/chat/MealAnalysisBubble';
 import { MealAnalysisCard } from '@/components/chat/MealAnalysisCard';
 import { DailyProgressCard } from '@/components/chat/DailyProgressCard';
+import { FinanceProgressCard } from '@/components/chat/FinanceProgressCard';
 import { QuickActionsBar, QuickAction } from '@/components/chat/QuickActionsBar';
 import { QuickReplies, QuickReply, getContextualReplies } from '@/components/chat/QuickReplies';
 import { WeeklySummaryCard } from '@/components/chat/WeeklySummaryCard';
 import { Message, Agent, WorkoutType, MealAnalysis } from '@/types';
-import { sendMessage as sendToClaudeAPI, generateGreeting } from '@/lib/claude';
+import { sendMessage as sendToClaudeAPI, generateGreeting, extractExpense, extractIncome, shouldShowBills, shouldShowSummary, shouldShowGoals, detectSummaryPeriod } from '@/lib/claude';
 import { parseError, ErrorType } from '@/lib/errors';
-
-// Get slime size based on pixel size
-const getSlimeSize = (pixelSize: number): 'xs' | 'small' | 'medium' | 'large' => {
-  if (pixelSize <= 48) return 'xs';
-  if (pixelSize <= 80) return 'small';
-  if (pixelSize <= 120) return 'medium';
-  return 'large';
-};
 
 // Meal analysis message data structure
 interface MealAnalysisMessage {
@@ -67,6 +76,42 @@ interface MealAnalysisMessage {
   photoUrl: string;
   analysis: MealAnalysis;
   notes?: string;
+}
+
+// Bills message data structure
+interface BillsMessage {
+  type: 'bills_card';
+  message: string;
+}
+
+// Summary message data structure
+interface SummaryMessage {
+  type: 'summary_card';
+  message: string;
+  period: 'week' | 'month';
+}
+
+// Goals message data structure
+interface GoalsMessage {
+  type: 'goals_card';
+  message: string;
+}
+
+// Budget breakdown message data structure
+interface BudgetMessage {
+  type: 'budget_card';
+  message: string;
+}
+
+// Log confirmation message data structure
+interface LogConfirmationMessage {
+  type: 'log_confirmation';
+  logType: 'expense' | 'income' | 'bill';
+  amount: number;
+  category: string;
+  description?: string;
+  timestamp: string;
+  receiptUrl?: string;
 }
 
 // Helper to parse meal analysis from message content
@@ -82,7 +127,72 @@ const parseMealAnalysis = (content: string): MealAnalysisMessage | null => {
   }
 };
 
-// Agent slime using unified component
+// Helper to parse bills card from message content
+const parseBillsMessage = (content: string): BillsMessage | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'bills_card') {
+      return parsed as BillsMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const parseSummaryMessage = (content: string): SummaryMessage | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'summary_card') {
+      // Default to 'week' if period not specified (for backwards compatibility)
+      return {
+        ...parsed,
+        period: parsed.period || 'week',
+      } as SummaryMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const parseGoalsMessage = (content: string): GoalsMessage | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'goals_card') {
+      return parsed as GoalsMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const parseBudgetMessage = (content: string): BudgetMessage | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'budget_card') {
+      return parsed as BudgetMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const parseLogConfirmationMessage = (content: string): LogConfirmationMessage | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'log_confirmation') {
+      return parsed as LogConfirmationMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+// Agent slime using ProfileSlime with circular accent background
 const AgentSlime = ({
   agent,
   size = 40,
@@ -92,9 +202,8 @@ const AgentSlime = ({
 }) => {
   const slimeColor = (agent?.persona_json?.slime_color || 'mint') as SlimeColor;
   const slimeType = (agent?.type || 'base') as SlimeType;
-  const slimeSize = getSlimeSize(size);
 
-  return <Slime color={slimeColor} type={slimeType} size={slimeSize} animated={false} />;
+  return <ProfileSlime color={slimeColor} type={slimeType} size={size} animated={false} />;
 };
 
 // Chat message bubble with optional error state
@@ -103,17 +212,110 @@ const MessageBubble = ({
   agent,
   isError,
   onRetry,
+  billsData,
+  onAddBill,
+  onPayBill,
+  onViewBill,
+  weeklySummaryData,
+  monthlySummaryData,
+  goalsData,
+  onAddGoal,
+  onViewGoal,
+  budgetData,
+  onCategoryPress,
+  onSavingsGoalPress,
+  currencySymbol,
+  todaySpent,
+  categoryBudgets,
+  savingsGoalsForAllocation,
+  onAllocateToSavings,
 }: {
   message: Message;
   agent?: Agent | null;
   isError?: boolean;
   onRetry?: () => void;
+  billsData?: {
+    bills: any[];
+    monthlyTotal: number;
+    subscriptionsTotal: number;
+  };
+  onAddBill?: () => void;
+  onPayBill?: (billId: string) => void;
+  onViewBill?: (bill: any) => void;
+  weeklySummaryData?: {
+    period: 'week';
+    periodLabel: string;
+    totalSpent: number;
+    totalIncome: number;
+    transactionCount: number;
+    byCategory: { category: string; amount: number }[];
+    dailyAverage: number;
+    budgetUsed?: number;
+  };
+  monthlySummaryData?: {
+    period: 'month';
+    periodLabel: string;
+    totalSpent: number;
+    totalIncome: number;
+    transactionCount: number;
+    byCategory: { category: string; amount: number }[];
+    dailyAverage: number;
+    budgetUsed?: number;
+  };
+  goalsData?: {
+    id: string;
+    name: string;
+    icon: string;
+    target_amount: number;
+    current_amount: number;
+    monthly_contribution?: number;
+  }[];
+  onAddGoal?: () => void;
+  onViewGoal?: (goal: any) => void;
+  budgetData?: {
+    totalBudget: number;
+    totalSpent: number;
+    totalRemaining: number;
+    dailySafeSpend: number;
+    daysLeft: number;
+    needsBudget: number;
+    needsSpent: number;
+    wantsBudget: number;
+    wantsSpent: number;
+    savingsBudget: number;
+    savingsAllocated: number;
+    categoryExpenses: { category: string; amount: number; budgetType: 'needs' | 'wants' | 'savings' }[];
+    savingsGoals: { id: string; name: string; icon: string; allocated: number; target: number }[];
+    billsPaid: { name: string; amount: number }[];
+  };
+  onCategoryPress?: (category: string) => void;
+  onSavingsGoalPress?: (goalId: string) => void;
+  currencySymbol?: string;
+  todaySpent?: number;
+  categoryBudgets?: Record<string, { spent: number; budget: number; remaining: number }>;
+  savingsGoalsForAllocation?: { id: string; name: string; icon: string }[];
+  onAllocateToSavings?: (goalId: string, amount: number) => void;
 }) => {
   const { colors: themeColors, isDarkMode } = useTheme();
   const isUser = message.role === 'user';
 
   // Check if this is a meal analysis message
   const mealAnalysis = !isUser ? parseMealAnalysis(message.content) : null;
+
+  // Check if this is a bills card message
+  const billsMessage = !isUser ? parseBillsMessage(message.content) : null;
+
+  // Check if this is a summary card message
+  const summaryMessage = !isUser ? parseSummaryMessage(message.content) : null;
+
+  // Check if this is a goals card message
+  const goalsMessage = !isUser ? parseGoalsMessage(message.content) : null;
+
+  // Check if this is a budget breakdown card message
+  const budgetMessage = !isUser ? parseBudgetMessage(message.content) : null;
+
+  // Check if this is a log confirmation message
+  const logConfirmation = !isUser ? parseLogConfirmationMessage(message.content) : null;
 
   // Render meal analysis card for assistant messages
   if (mealAnalysis) {
@@ -127,6 +329,151 @@ const MessageBubble = ({
             photoUrl={mealAnalysis.photoUrl}
             analysis={mealAnalysis.analysis}
             notes={mealAnalysis.notes}
+          />
+          <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Render bills card for assistant messages
+  if (billsMessage && billsData) {
+    return (
+      <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+        <View style={styles.avatarSmall}>
+          <AgentSlime agent={agent} size={32} />
+        </View>
+        <View style={styles.billsCardWrapper}>
+          <BillsCard
+            bills={billsData.bills}
+            monthlyTotal={billsData.monthlyTotal}
+            subscriptionsTotal={billsData.subscriptionsTotal}
+            currencySymbol={currencySymbol}
+            onAddBill={onAddBill}
+            onPayBill={onPayBill}
+            onViewBill={onViewBill}
+          />
+          <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Render summary card for assistant messages
+  // Select the correct data based on the message's period
+  const summaryData = summaryMessage?.period === 'month' ? monthlySummaryData : weeklySummaryData;
+  if (summaryMessage && summaryData) {
+    return (
+      <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+        <View style={styles.avatarSmall}>
+          <AgentSlime agent={agent} size={32} />
+        </View>
+        <View style={styles.billsCardWrapper}>
+          <FinanceSummaryCard
+            data={summaryData}
+            currencySymbol={currencySymbol}
+          />
+          <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Render goals card for assistant messages
+  if (goalsMessage && goalsData) {
+    return (
+      <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+        <View style={styles.avatarSmall}>
+          <AgentSlime agent={agent} size={32} />
+        </View>
+        <View style={styles.billsCardWrapper}>
+          <SavingsGoalsCard
+            goals={goalsData}
+            currencySymbol={currencySymbol}
+            onAddGoal={onAddGoal}
+            onViewGoal={onViewGoal}
+          />
+          <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Render budget breakdown card for assistant messages
+  if (budgetMessage && budgetData) {
+    return (
+      <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+        <View style={styles.avatarSmall}>
+          <AgentSlime agent={agent} size={32} />
+        </View>
+        <View style={styles.billsCardWrapper}>
+          <BudgetBreakdownCard
+            data={budgetData}
+            currencySymbol={currencySymbol}
+            onCategoryPress={onCategoryPress}
+            onSavingsGoalPress={onSavingsGoalPress}
+          />
+          <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Render log confirmation card for assistant messages
+  if (logConfirmation) {
+    // Get category budget info if available
+    const categoryBudget = categoryBudgets?.[logConfirmation.category];
+
+    return (
+      <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+        <View style={styles.avatarSmall}>
+          <AgentSlime agent={agent} size={32} />
+        </View>
+        <View style={styles.billsCardWrapper}>
+          <LogConfirmationCard
+            data={{
+              type: logConfirmation.logType,
+              amount: logConfirmation.amount,
+              category: logConfirmation.category,
+              description: logConfirmation.description,
+              timestamp: logConfirmation.timestamp,
+              receiptUrl: logConfirmation.receiptUrl,
+              budgetImpact: logConfirmation.logType !== 'income' && todaySpent !== undefined ? {
+                todaySpent: todaySpent,
+                dailyRemaining: 0,
+                categoryRemaining: categoryBudget?.remaining ?? 0,
+                categoryBudget: categoryBudget?.budget ?? 0,
+                percentUsed: categoryBudget ? (categoryBudget.spent / categoryBudget.budget) * 100 : 0,
+              } : undefined,
+            }}
+            currencySymbol={currencySymbol}
+            savingsGoals={savingsGoalsForAllocation}
+            onAllocateToSavings={onAllocateToSavings}
           />
           <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
             {new Date(message.created_at).toLocaleTimeString([], {
@@ -321,6 +668,12 @@ export default function ChatScreen() {
   // Weekly summary hook
   const weeklySummary = useWeeklySummary(agent);
 
+  // Finance hook
+  const finance = useFinance(agent);
+
+  // Bills hook
+  const bills = useBills(agent);
+
   const scrollViewRef = useRef<ScrollView>(null);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -332,6 +685,18 @@ export default function ChatScreen() {
   const [confirmedMealId, setConfirmedMealId] = useState<string | null>(null);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showWeeklySummary, setShowWeeklySummary] = useState(false);
+  const [showExpenseSheet, setShowExpenseSheet] = useState(false);
+  const [showIncomeSheet, setShowIncomeSheet] = useState(false);
+  const [showLogActionSheet, setShowLogActionSheet] = useState(false);
+  const [showBillSheet, setShowBillSheet] = useState(false);
+  const [showEditBillSheet, setShowEditBillSheet] = useState(false);
+  const [selectedBill, setSelectedBill] = useState<RecurringBill | null>(null);
+  const [showCategorySheet, setShowCategorySheet] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoryExpenses, setCategoryExpenses] = useState<any[]>([]);
+  const [showAddSavingsGoalSheet, setShowAddSavingsGoalSheet] = useState(false);
+  const [showEditSavingsGoalSheet, setShowEditSavingsGoalSheet] = useState(false);
+  const [selectedSavingsGoal, setSelectedSavingsGoal] = useState<any>(null);
 
   // Scroll position tracking
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -634,8 +999,353 @@ export default function ChatScreen() {
     }
   };
 
-  // Quick actions for the chat
-  const quickActions: QuickAction[] = [
+  // Check if this is a finance agent
+  const isFinanceAgent = agent?.type === 'finance' || agent?.type === 'budget_helper';
+
+  // Get currency symbol from agent
+  const getCurrencySymbol = () => {
+    const persona = agent?.persona_json as Record<string, any>;
+    return persona?.currency_symbol || '$';
+  };
+
+  // Handle opening expense sheet
+  const handleLogExpensePress = () => {
+    triggerHaptic('light');
+    setShowQuickActions(false);
+    toggleRotation.value = withTiming(0, { duration: 200 });
+    setShowExpenseSheet(true);
+  };
+
+  // Handle opening income sheet
+  const handleLogIncomePress = () => {
+    triggerHaptic('light');
+    setShowQuickActions(false);
+    toggleRotation.value = withTiming(0, { duration: 200 });
+    setShowIncomeSheet(true);
+  };
+
+  // Handle opening log action sheet (grouped Log button)
+  const handleLogPress = () => {
+    triggerHaptic('light');
+    setShowQuickActions(false);
+    toggleRotation.value = withTiming(0, { duration: 200 });
+    setShowLogActionSheet(true);
+  };
+
+  // Handle opening add bill sheet
+  const handleAddBillPress = () => {
+    triggerHaptic('light');
+    setShowBillSheet(true);
+  };
+
+  // Handle viewing bills - send a chat message to trigger BillsCard
+  const handleViewBillsPress = () => {
+    triggerHaptic('light');
+    setShowQuickActions(false);
+    toggleRotation.value = withTiming(0, { duration: 200 });
+    handleSend("Show me my bills");
+  };
+
+  // Handle adding a bill from the sheet
+  const handleAddBill = async (bill: {
+    name: string;
+    icon?: string;
+    amount: number;
+    category?: string;
+    frequency: 'weekly' | 'monthly' | 'yearly';
+    dueDay: number;
+    reminderDaysBefore?: number;
+    autoLog?: boolean;
+    isSubscription?: boolean;
+  }) => {
+    const result = await bills.addBill(bill);
+    if (result) {
+      await triggerHaptic('success');
+      showToast({
+        type: 'success',
+        message: `Added "${bill.name}" to your bills`,
+        duration: 2000,
+      });
+
+      // Send a confirmation message
+      const frequencyText = bill.frequency === 'monthly' ? '/month' : bill.frequency === 'yearly' ? '/year' : '/week';
+      const typeText = bill.isSubscription ? 'subscription' : 'bill';
+      await saveAssistantMessage(
+        `Added ${bill.name} as a recurring ${typeText} - ${getCurrencySymbol()}${bill.amount.toFixed(2)}${frequencyText}`
+      );
+    } else {
+      await triggerHaptic('error');
+      showError('Failed to add bill');
+    }
+  };
+
+  // Handle paying a bill
+  const handlePayBill = async (billId: string) => {
+    const success = await bills.payBill(billId);
+    if (success) {
+      await triggerHaptic('success');
+      showToast({
+        type: 'success',
+        message: 'Bill marked as paid',
+        duration: 2000,
+      });
+    } else {
+      await triggerHaptic('error');
+      showError('Failed to mark bill as paid');
+    }
+  };
+
+  // Handle viewing/editing a bill
+  const handleViewBill = (bill: RecurringBill) => {
+    triggerHaptic('light');
+    setSelectedBill(bill);
+    setShowEditBillSheet(true);
+  };
+
+  // Handle category press from budget breakdown card
+  const handleCategoryPress = async (category: string) => {
+    if (!agent?.id) return;
+    triggerHaptic('light');
+
+    // Fetch expenses for this category
+    const { data, error } = await getCategoryExpenses(agent.id, category);
+    if (!error && data) {
+      setCategoryExpenses(data);
+      setSelectedCategory(category);
+      setShowCategorySheet(true);
+    }
+  };
+
+  // Handle adding a new savings goal
+  const handleAddSavingsGoal = async (goalData: {
+    name: string;
+    icon: string;
+    target_amount: number;
+    target_date?: string;
+  }) => {
+    if (!agent?.id) return;
+
+    const { error } = await createSavingsGoal({
+      agent_id: agent.id,
+      name: goalData.name,
+      icon: goalData.icon,
+      target_amount: goalData.target_amount,
+      target_date: goalData.target_date,
+    });
+
+    if (!error) {
+      await triggerHaptic('success');
+      setShowAddSavingsGoalSheet(false);
+      finance.refresh();
+      showToast({
+        type: 'success',
+        message: `Started saving for ${goalData.name}!`,
+        duration: 2000,
+      });
+    } else {
+      await triggerHaptic('error');
+      showToast({
+        type: 'error',
+        message: 'Failed to create savings goal',
+        duration: 3000,
+      });
+    }
+  };
+
+  // Handle viewing/editing a savings goal
+  const handleViewSavingsGoal = (goal: any) => {
+    triggerHaptic('light');
+    setSelectedSavingsGoal(goal);
+    setShowEditSavingsGoalSheet(true);
+  };
+
+  // Handle adding funds to a savings goal
+  const handleAddFundsToGoal = async (goalId: string, amount: number) => {
+    const { error } = await addSavingsContribution(goalId, amount);
+
+    if (!error) {
+      await triggerHaptic('success');
+      finance.refresh();
+      // Update selected goal with new amount
+      if (selectedSavingsGoal && selectedSavingsGoal.id === goalId) {
+        setSelectedSavingsGoal({
+          ...selectedSavingsGoal,
+          current_amount: selectedSavingsGoal.current_amount + amount,
+        });
+      }
+      showToast({
+        type: 'success',
+        message: `Added $${amount.toFixed(2)} to savings!`,
+        duration: 2000,
+      });
+    } else {
+      await triggerHaptic('error');
+      showToast({
+        type: 'error',
+        message: 'Failed to add funds',
+        duration: 3000,
+      });
+    }
+  };
+
+  // Handle editing savings goal details
+  const handleEditSavingsGoal = async (
+    goalId: string,
+    updates: { name?: string; icon?: string; target_amount?: number; target_date?: string | null }
+  ) => {
+    const { error } = await updateSavingsGoalDetails(goalId, updates);
+
+    if (!error) {
+      await triggerHaptic('success');
+      finance.refresh();
+      // Update selected goal
+      if (selectedSavingsGoal && selectedSavingsGoal.id === goalId) {
+        setSelectedSavingsGoal({
+          ...selectedSavingsGoal,
+          ...updates,
+        });
+      }
+      showToast({
+        type: 'success',
+        message: 'Goal updated!',
+        duration: 2000,
+      });
+    } else {
+      await triggerHaptic('error');
+      showToast({
+        type: 'error',
+        message: 'Failed to update goal',
+        duration: 3000,
+      });
+    }
+  };
+
+  // Handle deleting a savings goal
+  const handleDeleteSavingsGoal = async (goalId: string) => {
+    const { error } = await deleteSavingsGoal(goalId);
+
+    if (!error) {
+      await triggerHaptic('success');
+      setShowEditSavingsGoalSheet(false);
+      setSelectedSavingsGoal(null);
+      finance.refresh();
+      showToast({
+        type: 'success',
+        message: 'Goal deleted',
+        duration: 2000,
+      });
+    } else {
+      await triggerHaptic('error');
+      showToast({
+        type: 'error',
+        message: 'Failed to delete goal',
+        duration: 3000,
+      });
+    }
+  };
+
+  // Handle saving bill edits
+  const handleSaveBill = async (billId: string, updates: any) => {
+    const result = await bills.updateBill(billId, updates);
+    if (result) {
+      await triggerHaptic('success');
+      setShowEditBillSheet(false);
+      setSelectedBill(null);
+      showToast({
+        type: 'success',
+        message: 'Bill updated',
+        duration: 2000,
+      });
+    } else {
+      await triggerHaptic('error');
+      showError('Failed to update bill');
+    }
+  };
+
+  // Handle deleting a bill
+  const handleDeleteBill = async (billId: string) => {
+    const success = await bills.removeBill(billId);
+    if (success) {
+      await triggerHaptic('success');
+      setShowEditBillSheet(false);
+      setSelectedBill(null);
+      showToast({
+        type: 'success',
+        message: 'Bill deleted',
+        duration: 2000,
+      });
+    } else {
+      await triggerHaptic('error');
+      showError('Failed to delete bill');
+    }
+  };
+
+  // Handle expense logging from sheet
+  const handleLogExpense = async (expense: { amount: number; category: string; categoryName: string; description?: string }) => {
+    const result = await finance.logExpense({
+      amount: expense.amount,
+      category: expense.category,
+      description: expense.description,
+    });
+
+    if (result) {
+      await triggerHaptic('success');
+      showToast({
+        type: 'success',
+        message: `Logged ${getCurrencySymbol()}${expense.amount.toFixed(2)} for ${expense.categoryName}`,
+        duration: 2000,
+      });
+
+      // Send structured log confirmation message
+      const logConfirmation: LogConfirmationMessage = {
+        type: 'log_confirmation',
+        logType: 'expense',
+        amount: expense.amount,
+        category: expense.category,
+        description: expense.description,
+        timestamp: new Date().toISOString(),
+      };
+      await saveAssistantMessage(JSON.stringify(logConfirmation));
+    } else {
+      await triggerHaptic('error');
+      showError('Failed to log expense');
+    }
+  };
+
+  // Handle income logging from sheet
+  const handleLogIncome = async (income: { amount: number; category: string; categoryName: string; description?: string }) => {
+    const result = await finance.logIncome({
+      amount: income.amount,
+      category: income.category,
+      description: income.description,
+    });
+
+    if (result) {
+      await triggerHaptic('success');
+      showToast({
+        type: 'success',
+        message: `Added ${getCurrencySymbol()}${income.amount.toFixed(2)} income`,
+        duration: 2000,
+      });
+
+      // Send structured log confirmation message
+      const logConfirmation: LogConfirmationMessage = {
+        type: 'log_confirmation',
+        logType: 'income',
+        amount: income.amount,
+        category: income.category,
+        description: income.description,
+        timestamp: new Date().toISOString(),
+      };
+      await saveAssistantMessage(JSON.stringify(logConfirmation));
+    } else {
+      await triggerHaptic('error');
+      showError('Failed to log income');
+    }
+  };
+
+  // Quick actions for fitness coach
+  const fitnessQuickActions: QuickAction[] = [
     {
       id: 'log-meal',
       label: 'Log Meal',
@@ -657,7 +1367,6 @@ export default function ChatScreen() {
         triggerHaptic('light');
         setShowQuickActions(false);
         toggleRotation.value = withTiming(0, { duration: 200 });
-        // Send a message to trigger the workout logging flow
         handleSend("I want to log a workout");
       },
     },
@@ -680,7 +1389,6 @@ export default function ChatScreen() {
         triggerHaptic('light');
         setShowQuickActions(false);
         toggleRotation.value = withTiming(0, { duration: 200 });
-        // Fetch and show weekly summary
         const summary = await weeklySummary.getCurrentWeekSummary();
         if (summary) {
           setShowWeeklySummary(true);
@@ -712,6 +1420,58 @@ export default function ChatScreen() {
       },
     },
   ];
+
+  // Quick actions for finance buddy
+  const financeQuickActions: QuickAction[] = [
+    {
+      id: 'log',
+      label: 'Log',
+      icon: 'add-circle-outline',
+      onPress: handleLogPress,
+    },
+    {
+      id: 'weekly-summary',
+      label: 'Summary',
+      icon: 'stats-chart-outline',
+      onPress: () => {
+        triggerHaptic('light');
+        setShowQuickActions(false);
+        toggleRotation.value = withTiming(0, { duration: 200 });
+        handleSend("Show me my weekly summary");
+      },
+    },
+    {
+      id: 'savings-goals',
+      label: 'Goals',
+      icon: 'flag-outline',
+      onPress: () => {
+        triggerHaptic('light');
+        setShowQuickActions(false);
+        toggleRotation.value = withTiming(0, { duration: 200 });
+        handleSend("How are my savings goals doing?");
+      },
+    },
+    {
+      id: 'budget',
+      label: 'Budget',
+      icon: 'pie-chart-outline',
+      onPress: () => {
+        triggerHaptic('light');
+        setShowQuickActions(false);
+        toggleRotation.value = withTiming(0, { duration: 200 });
+        handleSend("Show me my budget breakdown");
+      },
+    },
+    {
+      id: 'bills',
+      label: 'Bills',
+      icon: 'calendar-outline',
+      onPress: handleViewBillsPress,
+    },
+  ];
+
+  // Select quick actions based on agent type
+  const quickActions = isFinanceAgent ? financeQuickActions : fitnessQuickActions;
 
   // Get last agent message for contextual quick replies
   const lastAgentMessage = messages
@@ -865,7 +1625,7 @@ export default function ChatScreen() {
 
     try {
       // Call Claude API with agent context and memories
-      const { response, newMemories, workout } = await sendToClaudeAPI(
+      const { response, newMemories, workout, expense, income, showBills, showSummary, showGoals, showBudget, summaryPeriod } = await sendToClaudeAPI(
         agent,
         messages,
         memories,
@@ -892,8 +1652,71 @@ export default function ChatScreen() {
         }
       }
 
-      // Save assistant response to Supabase
-      await saveAssistantMessage(response);
+      // If Claude detected an expense to log, save it to database
+      if (expense && isFinanceAgent) {
+        const result = await finance.logExpense({
+          amount: expense.amount,
+          category: expense.category,
+          description: expense.description,
+        });
+        if (result) {
+          console.log('Expense logged from Claude response:', result);
+        }
+      }
+
+      // If Claude detected income to log, save it to database
+      if (income && isFinanceAgent) {
+        const result = await finance.logIncome({
+          amount: income.amount,
+          category: income.category,
+          description: income.description,
+        });
+        if (result) {
+          console.log('Income logged from Claude response:', result);
+        }
+      }
+
+      // Handle special card message types for finance agent
+      if (isFinanceAgent) {
+        if (showBills) {
+          // Refresh bills data first
+          await bills.refresh();
+          // Save as bills_card type with the text message
+          const billsMsg: BillsMessage = {
+            type: 'bills_card',
+            message: response,
+          };
+          await saveAssistantMessage(JSON.stringify(billsMsg));
+        } else if (showSummary) {
+          // Save as summary_card type with period
+          const summaryMsg: SummaryMessage = {
+            type: 'summary_card',
+            message: response,
+            period: summaryPeriod,
+          };
+          await saveAssistantMessage(JSON.stringify(summaryMsg));
+        } else if (showGoals) {
+          // Save as goals_card type
+          const goalsMsg: GoalsMessage = {
+            type: 'goals_card',
+            message: response,
+          };
+          await saveAssistantMessage(JSON.stringify(goalsMsg));
+        } else if (showBudget) {
+          // Save as budget_card type
+          const budgetMsg: BudgetMessage = {
+            type: 'budget_card',
+            message: response,
+          };
+          await saveAssistantMessage(JSON.stringify(budgetMsg));
+        } else {
+          // Save regular assistant response to Supabase
+          await saveAssistantMessage(response);
+        }
+      } else {
+        // Save regular assistant response to Supabase
+        await saveAssistantMessage(response);
+      }
 
       // Scroll to show the response
       setTimeout(scrollToBottom, 100);
@@ -945,7 +1768,7 @@ export default function ChatScreen() {
     setIsTyping(true);
 
     try {
-      const { response, newMemories, workout } = await sendToClaudeAPI(
+      const { response, newMemories, workout, expense, income, showBills, showSummary, showGoals, showBudget, summaryPeriod } = await sendToClaudeAPI(
         agent,
         messages.filter(m => m.id !== errorMessageId), // Exclude error message
         memories,
@@ -966,7 +1789,58 @@ export default function ChatScreen() {
         mealLogging.refreshTodayNutrition();
       }
 
-      await saveAssistantMessage(response);
+      // If Claude detected an expense to log, save it to database
+      if (expense && isFinanceAgent) {
+        await finance.logExpense({
+          amount: expense.amount,
+          category: expense.category,
+          description: expense.description,
+        });
+      }
+
+      // If Claude detected income to log, save it to database
+      if (income && isFinanceAgent) {
+        await finance.logIncome({
+          amount: income.amount,
+          category: income.category,
+          description: income.description,
+        });
+      }
+
+      // Handle special card message types for finance agent
+      if (isFinanceAgent) {
+        if (showBills) {
+          await bills.refresh();
+          const billsMsg: BillsMessage = {
+            type: 'bills_card',
+            message: response,
+          };
+          await saveAssistantMessage(JSON.stringify(billsMsg));
+        } else if (showSummary) {
+          const summaryMsg: SummaryMessage = {
+            type: 'summary_card',
+            message: response,
+            period: summaryPeriod,
+          };
+          await saveAssistantMessage(JSON.stringify(summaryMsg));
+        } else if (showGoals) {
+          const goalsMsg: GoalsMessage = {
+            type: 'goals_card',
+            message: response,
+          };
+          await saveAssistantMessage(JSON.stringify(goalsMsg));
+        } else if (showBudget) {
+          const budgetMsg: BudgetMessage = {
+            type: 'budget_card',
+            message: response,
+          };
+          await saveAssistantMessage(JSON.stringify(budgetMsg));
+        } else {
+          await saveAssistantMessage(response);
+        }
+      } else {
+        await saveAssistantMessage(response);
+      }
       setLastFailedMessage(null);
       await triggerHaptic('success');
 
@@ -1100,6 +1974,130 @@ export default function ChatScreen() {
                 agent={agent}
                 isError={msg.id === errorMessageId}
                 onRetry={msg.id === errorMessageId ? handleRetry : undefined}
+                billsData={isFinanceAgent ? {
+                  bills: bills.bills,
+                  monthlyTotal: bills.billsTotal?.monthlyTotal || 0,
+                  subscriptionsTotal: bills.billsTotal?.subscriptionsTotal || 0,
+                } : undefined}
+                onAddBill={handleAddBillPress}
+                onPayBill={handlePayBill}
+                onViewBill={handleViewBill}
+                weeklySummaryData={isFinanceAgent && finance.weeklyBudget ? {
+                  period: 'week' as const,
+                  periodLabel: 'This Week',
+                  totalSpent: finance.weeklyBudget.totalSpent,
+                  totalIncome: finance.weeklyBudget.totalIncome,
+                  transactionCount: finance.weeklyBudget.expenseCount + finance.weeklyBudget.incomeCount,
+                  byCategory: Object.entries(finance.weeklyBudget.byCategory || {}).map(([category, amount]) => ({
+                    category,
+                    amount: amount as number,
+                  })),
+                  dailyAverage: finance.weeklyBudget.dailyAverage,
+                  budgetUsed: (() => {
+                    // For weekly, calculate percentage of weekly budget (monthly / ~4.3)
+                    const tracking = finance.budgetTracking;
+                    const totalSpent = finance.weeklyBudget.totalSpent || 0;
+
+                    if (tracking && tracking.monthlyIncome > 0) {
+                      const weeklyBudget = (tracking.needsBudget + tracking.wantsBudget) / 4.33;
+                      if (weeklyBudget > 0) {
+                        return (totalSpent / weeklyBudget) * 100;
+                      }
+                    }
+
+                    if (finance.weeklyBudget.totalIncome > 0) {
+                      return (totalSpent / finance.weeklyBudget.totalIncome) * 100;
+                    }
+
+                    return undefined;
+                  })(),
+                } : undefined}
+                monthlySummaryData={isFinanceAgent && finance.monthlyBudget ? {
+                  period: 'month' as const,
+                  periodLabel: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+                  totalSpent: finance.monthlyBudget.totalSpent,
+                  totalIncome: finance.monthlyBudget.totalIncome,
+                  transactionCount: finance.monthlyBudget.expenseCount + finance.monthlyBudget.incomeCount,
+                  byCategory: Object.entries(finance.monthlyBudget.byCategory || {}).map(([category, amount]) => ({
+                    category,
+                    amount: amount as number,
+                  })),
+                  dailyAverage: finance.budgetTracking?.todaySpent || 0,
+                  budgetUsed: (() => {
+                    const tracking = finance.budgetTracking;
+                    const totalSpent = finance.monthlyBudget.totalSpent || 0;
+
+                    if (tracking && tracking.monthlyIncome > 0) {
+                      const spendableBudget = tracking.needsBudget + tracking.wantsBudget;
+                      if (spendableBudget > 0) {
+                        return (totalSpent / spendableBudget) * 100;
+                      }
+                    }
+
+                    if (finance.monthlyBudget.totalIncome > 0) {
+                      return (totalSpent / finance.monthlyBudget.totalIncome) * 100;
+                    }
+
+                    return undefined;
+                  })(),
+                } : undefined}
+                goalsData={isFinanceAgent ? finance.savingsGoals : undefined}
+                onAddGoal={() => setShowAddSavingsGoalSheet(true)}
+                onViewGoal={handleViewSavingsGoal}
+                budgetData={isFinanceAgent && finance.budgetTracking ? {
+                  totalBudget: finance.budgetTracking.needsBudget + finance.budgetTracking.wantsBudget,
+                  totalSpent: finance.budgetTracking.needsSpent + finance.budgetTracking.wantsSpent,
+                  totalRemaining: finance.budgetTracking.needsRemaining + finance.budgetTracking.wantsRemaining,
+                  dailySafeSpend: finance.budgetTracking.dailySafeSpend,
+                  daysLeft: finance.budgetTracking.daysLeftInMonth,
+                  needsBudget: finance.budgetTracking.needsBudget,
+                  needsSpent: finance.budgetTracking.needsSpent,
+                  wantsBudget: finance.budgetTracking.wantsBudget,
+                  wantsSpent: finance.budgetTracking.wantsSpent,
+                  savingsBudget: finance.budgetTracking.savingsBudget,
+                  savingsAllocated: finance.budgetTracking.savingsAllocated,
+                  categoryExpenses: Object.entries(finance.monthlyBudget?.byCategory || {}).map(([category, amount]) => ({
+                    category,
+                    amount: amount as number,
+                    budgetType: (['rent', 'bills', 'groceries', 'transport', 'health'].includes(category) ? 'needs' : 'wants') as 'needs' | 'wants' | 'savings',
+                  })),
+                  savingsGoals: finance.savingsGoals.map(g => ({
+                    id: g.id,
+                    name: g.name,
+                    icon: g.icon,
+                    allocated: g.current_amount,
+                    target: g.target_amount,
+                  })),
+                  billsPaid: [],
+                } : undefined}
+                onCategoryPress={handleCategoryPress}
+                onSavingsGoalPress={(goalId) => {
+                  const goal = finance.savingsGoals.find(g => g.id === goalId);
+                  if (goal) handleViewSavingsGoal(goal);
+                }}
+                currencySymbol={getCurrencySymbol()}
+                todaySpent={isFinanceAgent ? finance.budgetTracking?.todaySpent : undefined}
+                categoryBudgets={isFinanceAgent && finance.monthlyBudget?.byCategory ?
+                  Object.entries(finance.monthlyBudget.byCategory).reduce((acc, [category, spent]) => {
+                    // Simple budget estimate: 10% of needs budget for needs categories, 10% of wants for wants
+                    const isNeeds = ['rent', 'bills', 'groceries', 'transport', 'health'].includes(category);
+                    const budget = isNeeds
+                      ? (finance.budgetTracking?.needsBudget || 0) * 0.15
+                      : (finance.budgetTracking?.wantsBudget || 0) * 0.2;
+                    acc[category] = {
+                      spent: spent as number,
+                      budget: budget,
+                      remaining: budget - (spent as number),
+                    };
+                    return acc;
+                  }, {} as Record<string, { spent: number; budget: number; remaining: number }>)
+                : undefined}
+                savingsGoalsForAllocation={isFinanceAgent ? finance.savingsGoals.map(g => ({
+                  id: g.id,
+                  name: g.name,
+                  icon: g.icon,
+                })) : undefined}
+                onAllocateToSavings={handleAddFundsToGoal}
               />
             ))}
             {isTyping && <TypingIndicator agent={agent} />}
@@ -1121,8 +2119,8 @@ export default function ChatScreen() {
         />
       )}
 
-      {/* Daily Progress after confirming meal, logging water, or logging workout */}
-      {mealLogging.todayNutrition && (
+      {/* Daily Progress after confirming meal, logging water, or logging workout - Only for fitness agents */}
+      {!isFinanceAgent && mealLogging.todayNutrition && (
         mealLogging.todayNutrition.meal_count > 0 ||
         (mealLogging.todayNutrition.total_water_ml || 0) > 0 ||
         (mealLogging.todayNutrition.workouts_count || 0) > 0 ||
@@ -1135,6 +2133,20 @@ export default function ChatScreen() {
             waterGoalMl={waterLogging.waterGoalMl}
             showWaterAsGlasses={waterLogging.showAsGlasses}
             todayWorkout={workoutLogging.todayWorkouts[workoutLogging.todayWorkouts.length - 1] || null}
+          />
+        </View>
+      )}
+
+      {/* Finance Progress - Only for finance agents */}
+      {isFinanceAgent && (finance.todayFinance || finance.monthlyBudget || finance.budgetTracking) && (
+        <View style={[styles.dailyProgressContainer, { backgroundColor: themeColors.background }]}>
+          <FinanceProgressCard
+            todayFinance={finance.todayFinance}
+            monthlyBudget={finance.monthlyBudget}
+            budgetTracking={finance.budgetTracking}
+            savingsGoals={finance.savingsGoals}
+            currencySymbol={getCurrencySymbol()}
+            monthlyBudgetTarget={(agent?.persona_json as Record<string, any>)?.monthlyBudget}
           />
         </View>
       )}
@@ -1238,7 +2250,97 @@ export default function ChatScreen() {
         currentTotalMl={waterLogging.todayWaterMl}
         goalMl={waterLogging.waterGoalMl}
       />
-    </KeyboardAvoidingView>
+
+      {/* Log Expense Sheet */}
+      <LogExpenseSheet
+        visible={showExpenseSheet}
+        onClose={() => setShowExpenseSheet(false)}
+        onLog={handleLogExpense}
+        currencySymbol={getCurrencySymbol()}
+      />
+
+      {/* Add Income Sheet */}
+      <AddIncomeSheet
+        visible={showIncomeSheet}
+        onClose={() => setShowIncomeSheet(false)}
+        onLog={handleLogIncome}
+        currencySymbol={getCurrencySymbol()}
+      />
+
+      {/* Log Action Sheet (grouped Log button menu) */}
+      <LogActionSheet
+        visible={showLogActionSheet}
+        onClose={() => setShowLogActionSheet(false)}
+        onLogExpense={() => setShowExpenseSheet(true)}
+        onLogIncome={() => setShowIncomeSheet(true)}
+        onAddBill={() => setShowBillSheet(true)}
+        onScanReceipt={() => {
+          // Coming soon - for now show toast
+          showToast({
+            type: 'info',
+            message: 'Receipt scanning coming soon!',
+            duration: 2000,
+          });
+        }}
+      />
+
+      {/* Add Bill Sheet */}
+      <AddBillSheet
+        visible={showBillSheet}
+        onClose={() => setShowBillSheet(false)}
+        onAdd={handleAddBill}
+        currencySymbol={getCurrencySymbol()}
+      />
+
+      {/* Edit Bill Sheet */}
+      <EditBillSheet
+        visible={showEditBillSheet}
+        onClose={() => {
+          setShowEditBillSheet(false);
+          setSelectedBill(null);
+        }}
+        onSave={handleSaveBill}
+        onDelete={handleDeleteBill}
+        bill={selectedBill}
+        currencySymbol={getCurrencySymbol()}
+      />
+
+      {/* Category Expenses Sheet */}
+      <CategoryExpensesSheet
+        visible={showCategorySheet}
+        onClose={() => {
+          setShowCategorySheet(false);
+          setSelectedCategory(null);
+          setCategoryExpenses([]);
+        }}
+        category={selectedCategory || ''}
+        expenses={categoryExpenses}
+        currencySymbol={getCurrencySymbol()}
+      />
+
+      {/* Add Savings Goal Sheet */}
+      <AddSavingsGoalSheet
+        visible={showAddSavingsGoalSheet}
+        onClose={() => setShowAddSavingsGoalSheet(false)}
+        onAdd={handleAddSavingsGoal}
+        currencySymbol={getCurrencySymbol()}
+      />
+
+      {/* Edit Savings Goal Sheet */}
+      <EditSavingsGoalSheet
+        visible={showEditSavingsGoalSheet}
+        onClose={() => {
+          setShowEditSavingsGoalSheet(false);
+          setSelectedSavingsGoal(null);
+        }}
+        goal={selectedSavingsGoal}
+        onAddFunds={handleAddFundsToGoal}
+        onEdit={handleEditSavingsGoal}
+        onDelete={handleDeleteSavingsGoal}
+        currencySymbol={getCurrencySymbol()}
+      />
+
+      </KeyboardAvoidingView>
   );
 }
 
@@ -1377,6 +2479,11 @@ const styles = StyleSheet.create({
   // Meal analysis card wrapper
   mealAnalysisWrapper: {
     maxWidth: '85%',
+  },
+  // Bills card wrapper
+  billsCardWrapper: {
+    maxWidth: '90%',
+    flex: 1,
   },
   cardTimestamp: {
     marginTop: spacing.xs,
@@ -1581,4 +2688,4 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
     color: colors.surface,
   },
-});
+  });

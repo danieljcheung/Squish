@@ -22,7 +22,7 @@ import { spacing } from '@/constants/theme';
 import { useAgent } from '@/hooks/useAgent';
 import { useToast } from '@/context/ToastContext';
 import { useTheme } from '@/context/ThemeContext';
-import { BaseSlime, CoachSlime, Slime, SlimeColor, SlimeType } from '@/components/slime';
+import { BaseSlime, CoachSlime, Slime, ProfileSlime, SlimeColor, SlimeType } from '@/components/slime';
 import { AgentSettings, PersonaJson, DEFAULT_WATER_GOAL_ML, WATER_GLASS_ML } from '@/types';
 
 // Coaching style options
@@ -78,9 +78,7 @@ const AvatarWithEdit = ({ agent, onPress }: { agent: any; onPress?: () => void }
 
   return (
     <View style={styles.avatarContainer}>
-      <View style={styles.avatarBg}>
-        <Slime color={slimeColor} type={slimeType} size="medium" animated={false} />
-      </View>
+      <ProfileSlime color={slimeColor} type={slimeType} size={100} animated={false} />
       {onPress && (
         <Pressable style={styles.editAvatarButton} onPress={onPress}>
           <Ionicons name="pencil" size={14} color={colors.text} />
@@ -179,6 +177,17 @@ export default function SettingsScreen() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
+  // Finance-specific settings
+  const [dailySummaryEnabled, setDailySummaryEnabled] = useState(true);
+  const [dailySummaryHour, setDailySummaryHour] = useState(20); // 8pm
+  const [weeklySummaryEnabled, setWeeklySummaryEnabled] = useState(true);
+  const [budgetAlertsEnabled, setBudgetAlertsEnabled] = useState(true);
+  const [billRemindersEnabled, setBillRemindersEnabled] = useState(true);
+
+  // Check agent type
+  const isFinanceAgent = agent?.type === 'finance' || agent?.type === 'budget_helper';
+  const isFitnessAgent = agent?.type === 'fitness' || agent?.type === 'fitness_coach';
+
   // Initialize state from agent data
   useEffect(() => {
     if (agent) {
@@ -199,6 +208,13 @@ export default function SettingsScreen() {
         setMorningCheckinMinute(settings.morning_checkin?.time?.minute ?? 0);
         setMealReminders(settings.meal_reminders ?? false);
         setWaterReminders(settings.water_reminders ?? false);
+
+        // Finance-specific settings
+        setDailySummaryEnabled(settings.daily_summary?.enabled ?? true);
+        setDailySummaryHour(settings.daily_summary?.time?.hour ?? 20);
+        setWeeklySummaryEnabled(settings.weekly_summary?.enabled ?? true);
+        setBudgetAlertsEnabled(settings.budget_alerts?.enabled ?? true);
+        setBillRemindersEnabled(settings.bill_reminders?.enabled ?? true);
       }
     }
   }, [agent]);
@@ -221,11 +237,25 @@ export default function SettingsScreen() {
     const waterDisplayChanged = showWaterAsGlasses !== (persona?.show_water_as_glasses ?? true);
     const waterRemindersChanged = waterReminders !== (settings?.water_reminders ?? false);
 
-    setHasChanges(
-      nameChanged || styleChanged || notifChanged || morningChanged || mealChanged ||
-      waterGoalChanged || waterDisplayChanged || waterRemindersChanged
+    // Finance settings changes
+    const dailySummaryChanged = isFinanceAgent && (
+      dailySummaryEnabled !== (settings?.daily_summary?.enabled ?? true) ||
+      dailySummaryHour !== (settings?.daily_summary?.time?.hour ?? 20)
     );
-  }, [agent, name, style, notificationsEnabled, morningCheckinEnabled, morningCheckinHour, mealReminders, waterGoalMl, showWaterAsGlasses, waterReminders]);
+    const weeklySummaryChanged = isFinanceAgent && weeklySummaryEnabled !== (settings?.weekly_summary?.enabled ?? true);
+    const budgetAlertsChanged = isFinanceAgent && budgetAlertsEnabled !== (settings?.budget_alerts?.enabled ?? true);
+    const billRemindersChanged = isFinanceAgent && billRemindersEnabled !== (settings?.bill_reminders?.enabled ?? true);
+
+    // Fitness-specific changes only apply to fitness agents
+    const fitnessChanges = isFitnessAgent && (mealChanged || waterGoalChanged || waterDisplayChanged || waterRemindersChanged);
+
+    // Finance-specific changes only apply to finance agents
+    const financeChanges = isFinanceAgent && (dailySummaryChanged || weeklySummaryChanged || budgetAlertsChanged || billRemindersChanged);
+
+    setHasChanges(
+      nameChanged || styleChanged || notifChanged || morningChanged || fitnessChanges || financeChanges
+    );
+  }, [agent, name, style, notificationsEnabled, morningCheckinEnabled, morningCheckinHour, mealReminders, waterGoalMl, showWaterAsGlasses, waterReminders, dailySummaryEnabled, dailySummaryHour, weeklySummaryEnabled, budgetAlertsEnabled, billRemindersEnabled, isFinanceAgent, isFitnessAgent]);
 
   const triggerHaptic = async () => {
     try {
@@ -262,6 +292,20 @@ export default function SettingsScreen() {
           enabled: false,
           days: [1, 3, 5],
           time: { hour: 18, minute: 0 },
+        },
+        // Finance-specific settings
+        daily_summary: {
+          enabled: dailySummaryEnabled,
+          time: { hour: dailySummaryHour, minute: 0 },
+        },
+        weekly_summary: {
+          enabled: weeklySummaryEnabled,
+        },
+        budget_alerts: {
+          enabled: budgetAlertsEnabled,
+        },
+        bill_reminders: {
+          enabled: billRemindersEnabled,
         },
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
@@ -467,82 +511,178 @@ export default function SettingsScreen() {
                 </View>
               )}
 
-              <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
+              {/* Fitness-specific notification settings */}
+              {isFitnessAgent && (
+                <>
+                  <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
 
-              <View style={styles.settingRow}>
-                <View style={styles.settingInfo}>
-                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Meal Reminders</Text>
-                  <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Reminders for healthy eating</Text>
-                </View>
-                <Switch
-                  value={mealReminders}
-                  onValueChange={setMealReminders}
-                  trackColor={{ false: themeColors.background, true: themeColors.primary }}
-                  thumbColor="#ffffff"
-                  ios_backgroundColor={themeColors.background}
-                />
-              </View>
+                  <View style={styles.settingRow}>
+                    <View style={styles.settingInfo}>
+                      <Text style={[styles.settingLabel, { color: themeColors.text }]}>Meal Reminders</Text>
+                      <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Reminders for healthy eating</Text>
+                    </View>
+                    <Switch
+                      value={mealReminders}
+                      onValueChange={setMealReminders}
+                      trackColor={{ false: themeColors.background, true: themeColors.primary }}
+                      thumbColor="#ffffff"
+                      ios_backgroundColor={themeColors.background}
+                    />
+                  </View>
 
-              <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
+                  <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
 
-              <View style={styles.settingRow}>
-                <View style={styles.settingInfo}>
-                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Water Reminders</Text>
-                  <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Smart hydration reminders</Text>
-                </View>
-                <Switch
-                  value={waterReminders}
-                  onValueChange={setWaterReminders}
-                  trackColor={{ false: themeColors.background, true: themeColors.primary }}
-                  thumbColor="#ffffff"
-                  ios_backgroundColor={themeColors.background}
-                />
-              </View>
+                  <View style={styles.settingRow}>
+                    <View style={styles.settingInfo}>
+                      <Text style={[styles.settingLabel, { color: themeColors.text }]}>Water Reminders</Text>
+                      <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Smart hydration reminders</Text>
+                    </View>
+                    <Switch
+                      value={waterReminders}
+                      onValueChange={setWaterReminders}
+                      trackColor={{ false: themeColors.background, true: themeColors.primary }}
+                      thumbColor="#ffffff"
+                      ios_backgroundColor={themeColors.background}
+                    />
+                  </View>
+                </>
+              )}
             </>
           )}
         </View>
 
-        {/* Hydration */}
-        <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>HYDRATION</Text>
-        <View style={[styles.card, { backgroundColor: themeColors.surface }]}>
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={[styles.settingLabel, { color: themeColors.text }]}>Daily Water Goal</Text>
-              <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>{Math.round(waterGoalMl / WATER_GLASS_ML)} glasses ({waterGoalMl}ml)</Text>
-            </View>
-            <View style={[styles.goalAdjuster, { backgroundColor: themeColors.background }]}>
-              <Pressable
-                style={[styles.goalButton, { backgroundColor: themeColors.surface }]}
-                onPress={() => setWaterGoalMl((prev) => Math.max(500, prev - 250))}
-              >
-                <Text style={[styles.goalButtonText, { color: themeColors.text }]}>-</Text>
-              </Pressable>
-              <Text style={[styles.goalValue, { color: themeColors.text }]}>{waterGoalMl}ml</Text>
-              <Pressable
-                style={[styles.goalButton, { backgroundColor: themeColors.surface }]}
-                onPress={() => setWaterGoalMl((prev) => Math.min(5000, prev + 250))}
-              >
-                <Text style={[styles.goalButtonText, { color: themeColors.text }]}>+</Text>
-              </Pressable>
-            </View>
-          </View>
+        {/* Hydration - Only for fitness agents */}
+        {isFitnessAgent && (
+          <>
+            <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>HYDRATION</Text>
+            <View style={[styles.card, { backgroundColor: themeColors.surface }]}>
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Daily Water Goal</Text>
+                  <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>{Math.round(waterGoalMl / WATER_GLASS_ML)} glasses ({waterGoalMl}ml)</Text>
+                </View>
+                <View style={[styles.goalAdjuster, { backgroundColor: themeColors.background }]}>
+                  <Pressable
+                    style={[styles.goalButton, { backgroundColor: themeColors.surface }]}
+                    onPress={() => setWaterGoalMl((prev) => Math.max(500, prev - 250))}
+                  >
+                    <Text style={[styles.goalButtonText, { color: themeColors.text }]}>-</Text>
+                  </Pressable>
+                  <Text style={[styles.goalValue, { color: themeColors.text }]}>{waterGoalMl}ml</Text>
+                  <Pressable
+                    style={[styles.goalButton, { backgroundColor: themeColors.surface }]}
+                    onPress={() => setWaterGoalMl((prev) => Math.min(5000, prev + 250))}
+                  >
+                    <Text style={[styles.goalButtonText, { color: themeColors.text }]}>+</Text>
+                  </Pressable>
+                </View>
+              </View>
 
-          <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
+              <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
 
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={[styles.settingLabel, { color: themeColors.text }]}>Show as Glasses</Text>
-              <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Display water in glasses instead of ml</Text>
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Show as Glasses</Text>
+                  <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Display water in glasses instead of ml</Text>
+                </View>
+                <Switch
+                  value={showWaterAsGlasses}
+                  onValueChange={setShowWaterAsGlasses}
+                  trackColor={{ false: themeColors.background, true: themeColors.primary }}
+                  thumbColor="#ffffff"
+                  ios_backgroundColor={themeColors.background}
+                />
+              </View>
             </View>
-            <Switch
-              value={showWaterAsGlasses}
-              onValueChange={setShowWaterAsGlasses}
-              trackColor={{ false: themeColors.background, true: themeColors.primary }}
-              thumbColor="#ffffff"
-              ios_backgroundColor={themeColors.background}
-            />
-          </View>
-        </View>
+          </>
+        )}
+
+        {/* Finance Settings - Only for finance agents */}
+        {isFinanceAgent && (
+          <>
+            <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>BUDGET & SUMMARIES</Text>
+            <View style={[styles.card, { backgroundColor: themeColors.surface }]}>
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Daily Summary</Text>
+                  <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Evening recap of today's spending</Text>
+                </View>
+                <Switch
+                  value={dailySummaryEnabled}
+                  onValueChange={setDailySummaryEnabled}
+                  trackColor={{ false: themeColors.background, true: themeColors.primary }}
+                  thumbColor="#ffffff"
+                  ios_backgroundColor={themeColors.background}
+                />
+              </View>
+
+              {dailySummaryEnabled && (
+                <View style={styles.timePickerContainer}>
+                  <Text style={[styles.timePickerLabel, { color: themeColors.textMuted }]}>Summary time</Text>
+                  <View style={[styles.timePicker, { backgroundColor: themeColors.background }]}>
+                    <Pressable style={[styles.timeButton, { backgroundColor: themeColors.surface }]} onPress={() => setDailySummaryHour((h) => (h - 1 + 24) % 24)}>
+                      <Text style={[styles.timeButtonText, { color: themeColors.text }]}>-</Text>
+                    </Pressable>
+                    <Text style={[styles.timeDisplay, { color: themeColors.text }]}>
+                      {(dailySummaryHour % 12 || 12)}:00 {dailySummaryHour >= 12 ? 'PM' : 'AM'}
+                    </Text>
+                    <Pressable style={[styles.timeButton, { backgroundColor: themeColors.surface }]} onPress={() => setDailySummaryHour((h) => (h + 1) % 24)}>
+                      <Text style={[styles.timeButtonText, { color: themeColors.text }]}>+</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+
+              <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
+
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Weekly Summary</Text>
+                  <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Sunday evening week recap</Text>
+                </View>
+                <Switch
+                  value={weeklySummaryEnabled}
+                  onValueChange={setWeeklySummaryEnabled}
+                  trackColor={{ false: themeColors.background, true: themeColors.primary }}
+                  thumbColor="#ffffff"
+                  ios_backgroundColor={themeColors.background}
+                />
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
+
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Budget Alerts</Text>
+                  <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Warnings at 80% and 100% of budget</Text>
+                </View>
+                <Switch
+                  value={budgetAlertsEnabled}
+                  onValueChange={setBudgetAlertsEnabled}
+                  trackColor={{ false: themeColors.background, true: themeColors.primary }}
+                  thumbColor="#ffffff"
+                  ios_backgroundColor={themeColors.background}
+                />
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: themeColors.background }]} />
+
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Bill Reminders</Text>
+                  <Text style={[styles.settingDescription, { color: themeColors.textMuted }]}>Reminders before bills are due</Text>
+                </View>
+                <Switch
+                  value={billRemindersEnabled}
+                  onValueChange={setBillRemindersEnabled}
+                  trackColor={{ false: themeColors.background, true: themeColors.primary }}
+                  thumbColor="#ffffff"
+                  ios_backgroundColor={themeColors.background}
+                />
+              </View>
+            </View>
+          </>
+        )}
 
         {/* Danger Zone */}
         <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>DANGER ZONE</Text>

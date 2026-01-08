@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { CommonActions, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
@@ -76,16 +77,18 @@ const softShadow = Platform.select({
 interface Question {
   id: string;
   text: string;
-  type: 'choice' | 'text' | 'number';
+  type: 'choice' | 'text' | 'number' | 'currency' | 'budgetSplit';
   options?: string[];
   placeholder?: string;
   numberConfig?: {
     unit?: { options: string[]; default: string };
     validation?: { min?: number; max?: number };
+    prefix?: string;
   };
 }
 
-const QUESTIONS: Question[] = [
+// Fitness Coach questions
+const FITNESS_QUESTIONS: Question[] = [
   {
     id: 'goal',
     text: "Hey there! I'm excited to be your fitness coach! 💪\n\nFirst up - what's your main fitness goal?",
@@ -171,6 +174,62 @@ const QUESTIONS: Question[] = [
     ],
   },
 ];
+
+// Currency options
+const CURRENCY_OPTIONS = [
+  { code: 'CAD', symbol: '$', name: 'Canadian Dollar' },
+  { code: 'USD', symbol: '$', name: 'US Dollar' },
+  { code: 'EUR', symbol: '€', name: 'Euro' },
+  { code: 'GBP', symbol: '£', name: 'British Pound' },
+  { code: 'AUD', symbol: '$', name: 'Australian Dollar' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+  { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
+  { code: 'PHP', symbol: '₱', name: 'Philippine Peso' },
+];
+
+// Finance Buddy questions
+const FINANCE_QUESTIONS: Question[] = [
+  {
+    id: 'currency',
+    text: "Hey! I'm excited to help you manage your money! 💰\n\nFirst, what currency do you use?",
+    type: 'currency',
+  },
+  {
+    id: 'monthlyIncome',
+    text: "What's your approximate monthly income after taxes?\n\n(Don't worry, this stays private - it just helps me calculate your budget!)",
+    type: 'number',
+    placeholder: '4000',
+    numberConfig: {
+      validation: { min: 0, max: 1000000 },
+      prefix: '$',
+    },
+  },
+  {
+    id: 'budgetSplit',
+    text: "Here's a popular way to split your budget - the 50/30/20 rule:",
+    type: 'budgetSplit',
+  },
+  {
+    id: 'style',
+    text: 'How should I help you manage money?',
+    type: 'choice',
+    options: ['Strict 🎯 - Keep me accountable', 'Balanced ⚖️ - Friendly reminders', 'Relaxed 😌 - Just track, no judgment'],
+  },
+];
+
+// Get questions based on agent type
+const getQuestionsForAgentType = (agentType: AgentTypeId): Question[] => {
+  switch (agentType) {
+    case 'finance':
+      return FINANCE_QUESTIONS;
+    case 'fitness_coach':
+    default:
+      return FITNESS_QUESTIONS;
+  }
+};
+
+// Legacy export for backwards compatibility
+const QUESTIONS = FITNESS_QUESTIONS;
 
 // Onboarding phases
 type Phase = 'interview' | 'colorPicker' | 'namePicker' | 'transformation';
@@ -549,6 +608,7 @@ export default function CreateAgentScreen() {
   const { colors: themeColors } = useTheme();
   const { user } = useAuth();
   const { showError, showSuccess } = useToast();
+  const navigation = useNavigation();
   const scrollViewRef = useRef<ScrollView>(null);
   const params = useLocalSearchParams<{ agentType?: string }>();
 
@@ -564,19 +624,22 @@ export default function CreateAgentScreen() {
     }
   }, [params.agentType]);
 
+  // Get questions for this agent type
+  const questions = getQuestionsForAgentType(agentTypeId);
+
   // State
   const [phase, setPhase] = useState<Phase>('interview');
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [chatHistory, setChatHistory] = useState<Array<{ text: string; isUser: boolean }>>([
-    { text: QUESTIONS[0].text, isUser: false },
+    { text: questions[0].text, isUser: false },
   ]);
   const [textInput, setTextInput] = useState('');
   const [showOptions, setShowOptions] = useState(true);
   const [inputFocused, setInputFocused] = useState(false);
 
   // Color picker state
-  const [selectedColor, setSelectedColor] = useState<SlimeColor>('mint');
+  const [selectedColor, setSelectedColor] = useState<SlimeColor>(agentConfig?.defaultColor || 'mint');
 
   // Name picker state
   const [coachName, setCoachName] = useState('');
@@ -586,14 +649,20 @@ export default function CreateAgentScreen() {
   const [weightUnit, setWeightUnit] = useState('lbs');
   const [heightUnit, setHeightUnit] = useState('ft');
 
-  const currentQ = QUESTIONS[currentQuestion];
+  // Finance-specific state
+  const [selectedCurrency, setSelectedCurrency] = useState(CURRENCY_OPTIONS[0]);
+  const [budgetSplit, setBudgetSplit] = useState({ needs: 50, wants: 30, savings: 20 });
+  const [monthlyIncome, setMonthlyIncome] = useState(0);
+  const [showBudgetCustomization, setShowBudgetCustomization] = useState(false);
+
+  const currentQ = questions[currentQuestion];
 
   // Calculate progress based on phase
   const getProgress = () => {
     if (phase === 'interview') {
-      return (currentQuestion + 1) / (QUESTIONS.length + 2); // +2 for color and name steps
+      return (currentQuestion + 1) / (questions.length + 2); // +2 for color and name steps
     } else if (phase === 'colorPicker') {
-      return (QUESTIONS.length + 1) / (QUESTIONS.length + 2);
+      return (questions.length + 1) / (questions.length + 2);
     } else {
       return 1;
     }
@@ -613,8 +682,13 @@ export default function CreateAgentScreen() {
 
     setChatHistory((prev) => [...prev, { text: response, isUser: true }]);
 
+    // Store monthly income for budget calculations
+    if (currentQ.id === 'monthlyIncome') {
+      setMonthlyIncome(parseFloat(response.replace(/[^0-9.]/g, '')) || 0);
+    }
+
     // Check if this was the last interview question
-    if (currentQuestion >= QUESTIONS.length - 1) {
+    if (currentQuestion >= questions.length - 1) {
       // Move to color picker phase
       setTimeout(() => {
         setPhase('colorPicker');
@@ -624,7 +698,7 @@ export default function CreateAgentScreen() {
 
     // Move to next question
     setTimeout(() => {
-      const nextQ = QUESTIONS[currentQuestion + 1];
+      const nextQ = questions[currentQuestion + 1];
       setChatHistory((prev) => [...prev, { text: nextQ.text, isUser: false }]);
       setCurrentQuestion((prev) => prev + 1);
       setShowOptions(true);
@@ -678,60 +752,114 @@ export default function CreateAgentScreen() {
     if (!user) return;
 
     const finalName = coachName.trim() || agentConfig?.name || 'Squish';
-    const coachingStyle = responses.style?.includes('Tough')
-      ? 'tough_love'
-      : responses.style?.includes('Gentle')
-      ? 'gentle'
-      : 'balanced';
 
-    // Parse user metrics for nutrition calculations
-    const age = parseInt(responses.age) || 25;
-    const gender = parseGender(responses.gender || '');
-
-    // Parse weight (could be "150 lbs" or "68 kg")
-    const weightMatch = responses.weight?.match(/(\d+\.?\d*)\s*(lbs|kg)?/i);
-    let weightKg = 70; // default
-    if (weightMatch) {
-      const value = parseFloat(weightMatch[1]);
-      const unit = weightMatch[2]?.toLowerCase() || 'lbs';
-      weightKg = unit === 'kg' ? value : lbsToKg(value);
+    // Determine coaching style based on agent type
+    let coachingStyle = 'balanced';
+    if (agentTypeId === 'finance') {
+      coachingStyle = responses.style?.includes('Strict')
+        ? 'strict'
+        : responses.style?.includes('Relaxed')
+        ? 'relaxed'
+        : 'balanced';
+    } else {
+      coachingStyle = responses.style?.includes('Tough')
+        ? 'tough_love'
+        : responses.style?.includes('Gentle')
+        ? 'gentle'
+        : 'balanced';
     }
 
-    // Parse height (could be "5.10 ft" or "178 cm")
-    const heightMatch = responses.height?.match(/(\d+\.?\d*)\s*(ft|cm)?/i);
-    let heightCm = 170; // default
-    if (heightMatch) {
-      const value = heightMatch[1];
-      const unit = heightMatch[2]?.toLowerCase() || 'ft';
-      heightCm = parseHeightToCm(value, unit as 'ft' | 'cm');
-    }
-
-    const activityLevel = parseActivityLevel(responses.activityLevel || '');
-
-    // Build user metrics
-    const userMetrics = {
-      age,
-      gender,
-      weightKg,
-      heightCm,
-      activityLevel,
-    };
-
-    // Calculate nutrition goals based on user metrics and fitness goal
-    const nutritionGoals = calculateNutritionGoals(userMetrics, responses.goal || '');
-
-    const persona = {
+    let persona: Record<string, any> = {
       name: finalName,
       style: coachingStyle,
       slime_color: selectedColor,
-      userGoal: responses.goal,
-      userTarget: responses.target,
-      currentFrequency: responses.frequency,
-      preferredLocation: responses.location,
-      dietaryRestrictions: responses.diet,
-      userMetrics,
-      nutritionGoals,
     };
+
+    // Build persona based on agent type
+    if (agentTypeId === 'finance') {
+      // Finance Buddy persona
+      persona = {
+        ...persona,
+        currency: selectedCurrency.code,
+        currency_symbol: selectedCurrency.symbol,
+        monthly_income: monthlyIncome,
+        budget_split: budgetSplit,
+      };
+    } else {
+      // Fitness Coach persona
+      // Parse user metrics for nutrition calculations
+      const age = parseInt(responses.age) || 25;
+      const gender = parseGender(responses.gender || '');
+
+      // Parse weight (could be "150 lbs" or "68 kg")
+      const weightMatch = responses.weight?.match(/(\d+\.?\d*)\s*(lbs|kg)?/i);
+      let weightKg = 70; // default
+      if (weightMatch) {
+        const value = parseFloat(weightMatch[1]);
+        const unit = weightMatch[2]?.toLowerCase() || 'lbs';
+        weightKg = unit === 'kg' ? value : lbsToKg(value);
+      }
+
+      // Parse height (could be "5.10 ft" or "178 cm")
+      const heightMatch = responses.height?.match(/(\d+\.?\d*)\s*(ft|cm)?/i);
+      let heightCm = 170; // default
+      if (heightMatch) {
+        const value = heightMatch[1];
+        const unit = heightMatch[2]?.toLowerCase() || 'ft';
+        heightCm = parseHeightToCm(value, unit as 'ft' | 'cm');
+      }
+
+      const activityLevel = parseActivityLevel(responses.activityLevel || '');
+
+      // Build user metrics
+      const userMetrics = {
+        age,
+        gender,
+        weightKg,
+        heightCm,
+        activityLevel,
+      };
+
+      // Calculate nutrition goals based on user metrics and fitness goal
+      const nutritionGoals = calculateNutritionGoals(userMetrics, responses.goal || '');
+
+      persona = {
+        ...persona,
+        userGoal: responses.goal,
+        userTarget: responses.target,
+        currentFrequency: responses.frequency,
+        preferredLocation: responses.location,
+        dietaryRestrictions: responses.diet,
+        userMetrics,
+        nutritionGoals,
+      };
+    }
+
+    // Build settings based on agent type
+    const settings: Record<string, any> = {
+      notifications_enabled: true,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
+
+    if (agentTypeId === 'finance') {
+      settings.spending_alerts = true;
+      settings.weekly_summary = true;
+      settings.daily_checkin = {
+        enabled: true,
+        time: { hour: 20, minute: 0 }, // 8 PM for spending review
+      };
+    } else {
+      settings.morning_checkin = {
+        enabled: true,
+        time: { hour: 9, minute: 0 },
+      };
+      settings.meal_reminders = false;
+      settings.workout_reminders = {
+        enabled: false,
+        days: [1, 3, 5],
+        time: { hour: 18, minute: 0 },
+      };
+    }
 
     try {
       const { data, error } = await createAgent({
@@ -739,31 +867,28 @@ export default function CreateAgentScreen() {
         type: agentTypeId,
         name: finalName,
         persona_json: persona,
-        settings_json: {
-          notifications_enabled: true,
-          morning_checkin: {
-            enabled: true,
-            time: { hour: 9, minute: 0 },
-          },
-          meal_reminders: false,
-          workout_reminders: {
-            enabled: false,
-            days: [1, 3, 5],
-            time: { hour: 18, minute: 0 },
-          },
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
+        settings_json: settings,
       });
 
-      if (error) {
-        const appError = parseError(error);
+      if (error || !data) {
+        const appError = parseError(error || new Error('Failed to create agent'));
         showError(appError);
         router.replace('/(main)');
         return;
       }
 
       showSuccess(`${finalName} has been created!`);
-      router.replace('/(main)');
+      // Reset navigation stack: Home as root, then Chat on top
+      // This ensures back from chat goes to home, not onboarding
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 1,
+          routes: [
+            { name: 'index' },
+            { name: 'chat/[id]', params: { id: data.id } },
+          ],
+        })
+      );
     } catch (err) {
       const appError = parseError(err);
       showError(appError);
@@ -844,7 +969,7 @@ export default function CreateAgentScreen() {
       <KeyboardAvoidingView
         style={[styles.container, { backgroundColor: themeColors.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        keyboardVerticalOffset={0}
       >
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + spacing.lg, backgroundColor: themeColors.background }]}>
@@ -865,8 +990,14 @@ export default function CreateAgentScreen() {
           <ProgressBar progress={getProgress()} themeColors={themeColors} />
         </View>
 
-        {/* Content */}
-        <View style={styles.colorPickerContent}>
+        {/* Scrollable Content */}
+        <ScrollView
+          style={styles.namePickerScrollView}
+          contentContainerStyle={styles.namePickerScrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
           <Text style={[styles.colorPickerTitle, { color: themeColors.text }]}>Name your Squish</Text>
           <Text style={[styles.colorPickerSubtitle, { color: themeColors.textMuted }]}>
             What should your {agentConfig?.name || 'Squish'} be called?
@@ -887,16 +1018,14 @@ export default function CreateAgentScreen() {
               placeholderTextColor={themeColors.textMuted}
               autoFocus={false}
               returnKeyType="done"
-              onSubmitEditing={handleNameSubmit}
+              blurOnSubmit={true}
             />
           </View>
-        </View>
 
-        {/* Continue button */}
-        <View style={[styles.inputArea, { paddingBottom: insets.bottom + spacing.lg, backgroundColor: themeColors.surface, borderTopColor: themeColors.background }]}>
+          {/* Continue button inside scroll for keyboard visibility */}
           <Pressable
             style={({ pressed }) => [
-              styles.continueButton,
+              styles.namePickerButton,
               { backgroundColor: themeColors.primary },
               pressed && { backgroundColor: colors.primaryDark, transform: [{ scale: 0.98 }] },
             ]}
@@ -905,7 +1034,10 @@ export default function CreateAgentScreen() {
             <Text style={[styles.continueButtonText, { color: themeColors.text }]}>Create Squish</Text>
             <Ionicons name="sparkles" size={20} color={themeColors.text} />
           </Pressable>
-        </View>
+        </ScrollView>
+
+        {/* Bottom safe area padding */}
+        <View style={{ height: insets.bottom + spacing.md, backgroundColor: themeColors.background }} />
       </KeyboardAvoidingView>
     );
   }
@@ -973,7 +1105,228 @@ export default function CreateAgentScreen() {
       {/* Input area */}
       {showOptions && (
         <View style={[styles.inputArea, { backgroundColor: themeColors.surface, borderTopColor: themeColors.background, paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
-          {currentQ.type === 'choice' && currentQ.options ? (
+          {currentQ.type === 'currency' ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.currencyContainer}>
+              {CURRENCY_OPTIONS.map((currency) => (
+                <Pressable
+                  key={currency.code}
+                  style={[
+                    styles.currencyOption,
+                    { backgroundColor: themeColors.background, borderColor: themeColors.primary },
+                    selectedCurrency.code === currency.code && { backgroundColor: themeColors.primary },
+                  ]}
+                  onPress={() => {
+                    setSelectedCurrency(currency);
+                    handleResponse(`${currency.code} (${currency.symbol})`);
+                  }}
+                >
+                  <Text style={[styles.currencySymbol, { color: selectedCurrency.code === currency.code ? '#101914' : themeColors.text }]}>
+                    {currency.symbol}
+                  </Text>
+                  <Text style={[styles.currencyCode, { color: selectedCurrency.code === currency.code ? '#101914' : themeColors.textMuted }]}>
+                    {currency.code}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : currentQ.type === 'budgetSplit' ? (
+            <View style={styles.budgetSplitContainer}>
+              {!showBudgetCustomization ? (
+                <>
+                  <View style={[styles.budgetCard, { backgroundColor: themeColors.background }]}>
+                    <View style={styles.budgetRow}>
+                      <View style={[styles.budgetDot, { backgroundColor: '#4ade80' }]} />
+                      <Text style={[styles.budgetLabel, { color: themeColors.text }]}>Needs</Text>
+                      <Text style={[styles.budgetPercent, { color: themeColors.text }]}>{budgetSplit.needs}%</Text>
+                      <Text style={[styles.budgetAmount, { color: themeColors.textMuted }]}>
+                        {selectedCurrency.symbol}{Math.round(monthlyIncome * budgetSplit.needs / 100).toLocaleString()}
+                      </Text>
+                    </View>
+                    <Text style={[styles.budgetHint, { color: themeColors.textMuted }]}>Rent, bills, groceries, transport</Text>
+
+                    <View style={styles.budgetRow}>
+                      <View style={[styles.budgetDot, { backgroundColor: '#60a5fa' }]} />
+                      <Text style={[styles.budgetLabel, { color: themeColors.text }]}>Wants</Text>
+                      <Text style={[styles.budgetPercent, { color: themeColors.text }]}>{budgetSplit.wants}%</Text>
+                      <Text style={[styles.budgetAmount, { color: themeColors.textMuted }]}>
+                        {selectedCurrency.symbol}{Math.round(monthlyIncome * budgetSplit.wants / 100).toLocaleString()}
+                      </Text>
+                    </View>
+                    <Text style={[styles.budgetHint, { color: themeColors.textMuted }]}>Entertainment, shopping, dining out</Text>
+
+                    <View style={styles.budgetRow}>
+                      <View style={[styles.budgetDot, { backgroundColor: '#f59e0b' }]} />
+                      <Text style={[styles.budgetLabel, { color: themeColors.text }]}>Savings</Text>
+                      <Text style={[styles.budgetPercent, { color: themeColors.text }]}>{budgetSplit.savings}%</Text>
+                      <Text style={[styles.budgetAmount, { color: themeColors.textMuted }]}>
+                        {selectedCurrency.symbol}{Math.round(monthlyIncome * budgetSplit.savings / 100).toLocaleString()}
+                      </Text>
+                    </View>
+                    <Text style={[styles.budgetHint, { color: themeColors.textMuted }]}>Emergency fund, investments</Text>
+                  </View>
+
+                  <View style={styles.budgetActions}>
+                    <Pressable
+                      style={[styles.budgetActionButton, { backgroundColor: themeColors.primary }]}
+                      onPress={() => handleResponse(`${budgetSplit.needs}/${budgetSplit.wants}/${budgetSplit.savings}`)}
+                    >
+                      <Text style={[styles.budgetActionText, { color: '#101914' }]}>Looks good!</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.budgetActionButtonSecondary, { borderColor: themeColors.primary }]}
+                      onPress={() => setShowBudgetCustomization(true)}
+                    >
+                      <Text style={[styles.budgetActionTextSecondary, { color: themeColors.text }]}>Let me customize</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <>
+                  {/* Customization UI */}
+                  <View style={[styles.budgetCard, { backgroundColor: themeColors.background }]}>
+                    {/* Visual breakdown bar */}
+                    <View style={styles.budgetVisualBar}>
+                      <View style={[styles.budgetBarSegment, { flex: budgetSplit.needs, backgroundColor: '#4ade80' }]} />
+                      <View style={[styles.budgetBarSegment, { flex: budgetSplit.wants, backgroundColor: '#60a5fa' }]} />
+                      <View style={[styles.budgetBarSegment, { flex: budgetSplit.savings, backgroundColor: '#f59e0b' }]} />
+                    </View>
+
+                    {/* Needs Slider */}
+                    <View style={styles.budgetSliderRow}>
+                      <View style={[styles.budgetDot, { backgroundColor: '#4ade80' }]} />
+                      <Text style={[styles.budgetSliderLabel, { color: themeColors.text }]}>Needs</Text>
+                      <View style={styles.budgetSliderContainer}>
+                        <View style={[styles.budgetSliderTrack, { backgroundColor: themeColors.surface }]}>
+                          <View style={[styles.budgetSliderFill, { width: `${budgetSplit.needs}%`, backgroundColor: '#4ade80' }]} />
+                        </View>
+                        <View style={styles.budgetSliderButtons}>
+                          <Pressable
+                            style={[styles.budgetSliderBtn, { backgroundColor: themeColors.surface }]}
+                            onPress={() => setBudgetSplit(prev => ({ ...prev, needs: Math.max(0, prev.needs - 5) }))}
+                          >
+                            <Ionicons name="remove" size={16} color={themeColors.text} />
+                          </Pressable>
+                          <Text style={[styles.budgetSliderValue, { color: themeColors.text }]}>{budgetSplit.needs}%</Text>
+                          <Pressable
+                            style={[styles.budgetSliderBtn, { backgroundColor: themeColors.surface }]}
+                            onPress={() => setBudgetSplit(prev => ({ ...prev, needs: Math.min(100, prev.needs + 5) }))}
+                          >
+                            <Ionicons name="add" size={16} color={themeColors.text} />
+                          </Pressable>
+                        </View>
+                      </View>
+                      <Text style={[styles.budgetSliderAmount, { color: themeColors.textMuted }]}>
+                        {selectedCurrency.symbol}{Math.round(monthlyIncome * budgetSplit.needs / 100).toLocaleString()}
+                      </Text>
+                    </View>
+
+                    {/* Wants Slider */}
+                    <View style={styles.budgetSliderRow}>
+                      <View style={[styles.budgetDot, { backgroundColor: '#60a5fa' }]} />
+                      <Text style={[styles.budgetSliderLabel, { color: themeColors.text }]}>Wants</Text>
+                      <View style={styles.budgetSliderContainer}>
+                        <View style={[styles.budgetSliderTrack, { backgroundColor: themeColors.surface }]}>
+                          <View style={[styles.budgetSliderFill, { width: `${budgetSplit.wants}%`, backgroundColor: '#60a5fa' }]} />
+                        </View>
+                        <View style={styles.budgetSliderButtons}>
+                          <Pressable
+                            style={[styles.budgetSliderBtn, { backgroundColor: themeColors.surface }]}
+                            onPress={() => setBudgetSplit(prev => ({ ...prev, wants: Math.max(0, prev.wants - 5) }))}
+                          >
+                            <Ionicons name="remove" size={16} color={themeColors.text} />
+                          </Pressable>
+                          <Text style={[styles.budgetSliderValue, { color: themeColors.text }]}>{budgetSplit.wants}%</Text>
+                          <Pressable
+                            style={[styles.budgetSliderBtn, { backgroundColor: themeColors.surface }]}
+                            onPress={() => setBudgetSplit(prev => ({ ...prev, wants: Math.min(100, prev.wants + 5) }))}
+                          >
+                            <Ionicons name="add" size={16} color={themeColors.text} />
+                          </Pressable>
+                        </View>
+                      </View>
+                      <Text style={[styles.budgetSliderAmount, { color: themeColors.textMuted }]}>
+                        {selectedCurrency.symbol}{Math.round(monthlyIncome * budgetSplit.wants / 100).toLocaleString()}
+                      </Text>
+                    </View>
+
+                    {/* Savings Slider */}
+                    <View style={styles.budgetSliderRow}>
+                      <View style={[styles.budgetDot, { backgroundColor: '#f59e0b' }]} />
+                      <Text style={[styles.budgetSliderLabel, { color: themeColors.text }]}>Savings</Text>
+                      <View style={styles.budgetSliderContainer}>
+                        <View style={[styles.budgetSliderTrack, { backgroundColor: themeColors.surface }]}>
+                          <View style={[styles.budgetSliderFill, { width: `${budgetSplit.savings}%`, backgroundColor: '#f59e0b' }]} />
+                        </View>
+                        <View style={styles.budgetSliderButtons}>
+                          <Pressable
+                            style={[styles.budgetSliderBtn, { backgroundColor: themeColors.surface }]}
+                            onPress={() => setBudgetSplit(prev => ({ ...prev, savings: Math.max(0, prev.savings - 5) }))}
+                          >
+                            <Ionicons name="remove" size={16} color={themeColors.text} />
+                          </Pressable>
+                          <Text style={[styles.budgetSliderValue, { color: themeColors.text }]}>{budgetSplit.savings}%</Text>
+                          <Pressable
+                            style={[styles.budgetSliderBtn, { backgroundColor: themeColors.surface }]}
+                            onPress={() => setBudgetSplit(prev => ({ ...prev, savings: Math.min(100, prev.savings + 5) }))}
+                          >
+                            <Ionicons name="add" size={16} color={themeColors.text} />
+                          </Pressable>
+                        </View>
+                      </View>
+                      <Text style={[styles.budgetSliderAmount, { color: themeColors.textMuted }]}>
+                        {selectedCurrency.symbol}{Math.round(monthlyIncome * budgetSplit.savings / 100).toLocaleString()}
+                      </Text>
+                    </View>
+
+                    {/* Total */}
+                    <View style={[styles.budgetTotalRow, { borderTopColor: themeColors.surface }]}>
+                      <Text style={[styles.budgetTotalLabel, { color: themeColors.text }]}>Total</Text>
+                      <Text style={[
+                        styles.budgetTotalValue,
+                        { color: budgetSplit.needs + budgetSplit.wants + budgetSplit.savings === 100 ? '#4ade80' : '#ef4444' }
+                      ]}>
+                        {budgetSplit.needs + budgetSplit.wants + budgetSplit.savings}%
+                      </Text>
+                      {budgetSplit.needs + budgetSplit.wants + budgetSplit.savings !== 100 && (
+                        <Text style={styles.budgetTotalError}>Must equal 100%</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <View style={styles.budgetActions}>
+                    <Pressable
+                      style={[styles.budgetActionButtonSecondary, { borderColor: themeColors.primary }]}
+                      onPress={() => {
+                        setBudgetSplit({ needs: 50, wants: 30, savings: 20 });
+                        setShowBudgetCustomization(false);
+                      }}
+                    >
+                      <Text style={[styles.budgetActionTextSecondary, { color: themeColors.text }]}>Reset</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.budgetActionButton,
+                        { backgroundColor: budgetSplit.needs + budgetSplit.wants + budgetSplit.savings === 100 ? themeColors.primary : themeColors.surface }
+                      ]}
+                      onPress={() => {
+                        if (budgetSplit.needs + budgetSplit.wants + budgetSplit.savings === 100) {
+                          handleResponse(`${budgetSplit.needs}/${budgetSplit.wants}/${budgetSplit.savings}`);
+                        }
+                      }}
+                      disabled={budgetSplit.needs + budgetSplit.wants + budgetSplit.savings !== 100}
+                    >
+                      <Text style={[
+                        styles.budgetActionText,
+                        { color: budgetSplit.needs + budgetSplit.wants + budgetSplit.savings === 100 ? '#101914' : themeColors.textMuted }
+                      ]}>
+                        Continue
+                      </Text>
+                    </Pressable>
+                  </View>
+                </>
+              )}
+            </View>
+          ) : currentQ.type === 'choice' && currentQ.options ? (
             <View style={styles.optionsContainer}>
               {currentQ.options.map((option, index) => (
                 <OptionButton
@@ -991,6 +1344,7 @@ export default function CreateAgentScreen() {
                 value={numberInput}
                 onChangeValue={setNumberInput}
                 placeholder={currentQ.placeholder}
+                prefix={currentQ.numberConfig?.prefix || (agentTypeId === 'finance' ? selectedCurrency.symbol : undefined)}
                 unit={
                   currentQ.numberConfig?.unit
                     ? {
@@ -1341,9 +1695,20 @@ const styles = StyleSheet.create({
   },
 
   // Name picker
+  namePickerScrollView: {
+    flex: 1,
+  },
+  namePickerScrollContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    paddingHorizontal: spacing['2xl'],
+    paddingTop: spacing['3xl'],
+    paddingBottom: spacing['2xl'],
+  },
   nameInputContainer: {
     width: '100%',
     paddingHorizontal: spacing.lg,
+    marginBottom: spacing['2xl'],
   },
   nameInput: {
     backgroundColor: colors.surface,
@@ -1356,6 +1721,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     borderWidth: 2,
     borderColor: colors.primary,
+  },
+  namePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing['3xl'],
+    borderRadius: 24,
+    marginTop: 'auto',
+    ...softShadow,
   },
 
   // Transformation
@@ -1391,5 +1768,184 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.primary,
     opacity: 0.6,
+  },
+
+  // Currency picker
+  currencyContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  currencyOption: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 16,
+    borderWidth: 2,
+    minWidth: 72,
+  },
+  currencySymbol: {
+    fontSize: typography.sizes.xl,
+    fontFamily: fonts.bold,
+    marginBottom: 2,
+  },
+  currencyCode: {
+    fontSize: typography.sizes.xs,
+    fontFamily: fonts.medium,
+  },
+
+  // Budget split
+  budgetSplitContainer: {
+    width: '100%',
+  },
+  budgetCard: {
+    borderRadius: 16,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  budgetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  budgetDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: spacing.sm,
+  },
+  budgetLabel: {
+    fontSize: typography.sizes.md,
+    fontFamily: fonts.semiBold,
+    flex: 1,
+  },
+  budgetPercent: {
+    fontSize: typography.sizes.md,
+    fontFamily: fonts.bold,
+    marginRight: spacing.md,
+  },
+  budgetAmount: {
+    fontSize: typography.sizes.sm,
+    fontFamily: fonts.medium,
+    minWidth: 80,
+    textAlign: 'right',
+  },
+  budgetHint: {
+    fontSize: typography.sizes.xs,
+    fontFamily: fonts.regular,
+    marginLeft: 20,
+    marginTop: 2,
+    marginBottom: spacing.sm,
+  },
+  budgetActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  budgetActionButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  budgetActionText: {
+    fontSize: typography.sizes.md,
+    fontFamily: fonts.semiBold,
+  },
+  budgetActionButtonSecondary: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+  },
+  budgetActionTextSecondary: {
+    fontSize: typography.sizes.md,
+    fontFamily: fonts.medium,
+  },
+
+  // Budget customization
+  budgetVisualBar: {
+    flexDirection: 'row',
+    height: 24,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
+  },
+  budgetBarSegment: {
+    height: '100%',
+  },
+  budgetSliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  budgetSliderLabel: {
+    fontSize: typography.sizes.sm,
+    fontFamily: fonts.semiBold,
+    width: 55,
+  },
+  budgetSliderContainer: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  budgetSliderTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  budgetSliderFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  budgetSliderButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  budgetSliderBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  budgetSliderValue: {
+    fontSize: typography.sizes.md,
+    fontFamily: fonts.bold,
+    width: 40,
+    textAlign: 'center',
+  },
+  budgetSliderAmount: {
+    fontSize: typography.sizes.xs,
+    fontFamily: fonts.medium,
+    width: 60,
+    textAlign: 'right',
+  },
+  budgetTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: spacing.md,
+    marginTop: spacing.sm,
+    borderTopWidth: 1,
+    gap: spacing.sm,
+  },
+  budgetTotalLabel: {
+    fontSize: typography.sizes.md,
+    fontFamily: fonts.semiBold,
+    flex: 1,
+  },
+  budgetTotalValue: {
+    fontSize: typography.sizes.lg,
+    fontFamily: fonts.bold,
+  },
+  budgetTotalError: {
+    fontSize: typography.sizes.xs,
+    fontFamily: fonts.medium,
+    color: '#ef4444',
   },
 });

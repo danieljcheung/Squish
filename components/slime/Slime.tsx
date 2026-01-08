@@ -17,7 +17,8 @@ import { colors } from '@/constants/colors';
 export type SlimeColor = 'mint' | 'peach' | 'lavender' | 'skyBlue' | 'coral' | 'lemon' | 'rose' | 'sage';
 
 // Slime type (determines shape AND accessories)
-export type SlimeType = 'base' | 'fitness_coach' | 'budget_helper' | 'study_buddy';
+// 'finance' is an alias for 'budget_helper'
+export type SlimeType = 'base' | 'fitness_coach' | 'budget_helper' | 'finance' | 'study_buddy';
 
 // Size presets
 export type SlimeSize = 'xs' | 'small' | 'medium' | 'large';
@@ -56,14 +57,21 @@ const SHAPE_CONFIG = {
     borderBottomLeftRadius: '30%',
   },
   fitness_coach: {
-    // border-radius: 50% 50% 40% 60% / 60% 40% 50% 50% (buffer/wider)
-    borderTopLeftRadius: '50%',
-    borderTopRightRadius: '50%',
-    borderBottomRightRadius: '40%',
-    borderBottomLeftRadius: '60%',
+    // Same shape as base (no special shape for fitness coach)
+    borderTopLeftRadius: '40%',
+    borderTopRightRadius: '60%',
+    borderBottomRightRadius: '70%',
+    borderBottomLeftRadius: '30%',
   },
   budget_helper: {
     // border-radius: 30% 70% 70% 30% / 30% 30% 70% 70% (tilted left, rounder)
+    borderTopLeftRadius: '30%',
+    borderTopRightRadius: '70%',
+    borderBottomRightRadius: '70%',
+    borderBottomLeftRadius: '30%',
+  },
+  finance: {
+    // Same as budget_helper
     borderTopLeftRadius: '30%',
     borderTopRightRadius: '70%',
     borderBottomRightRadius: '70%',
@@ -86,11 +94,18 @@ const MORPH_VARIANTS = {
     { tl: 38, tr: 62, br: 72, bl: 28 },
   ],
   fitness_coach: [
-    { tl: 50, tr: 50, br: 40, bl: 60 },
-    { tl: 55, tr: 45, br: 45, bl: 55 },
-    { tl: 48, tr: 52, br: 38, bl: 62 },
+    // Same as base (fitness coach looks identical to base)
+    { tl: 40, tr: 60, br: 70, bl: 30 },
+    { tl: 45, tr: 55, br: 65, bl: 35 },
+    { tl: 38, tr: 62, br: 72, bl: 28 },
   ],
   budget_helper: [
+    { tl: 30, tr: 70, br: 70, bl: 30 },
+    { tl: 35, tr: 65, br: 65, bl: 35 },
+    { tl: 28, tr: 72, br: 72, bl: 28 },
+  ],
+  finance: [
+    // Same as budget_helper
     { tl: 30, tr: 70, br: 70, bl: 30 },
     { tl: 35, tr: 65, br: 65, bl: 35 },
     { tl: 28, tr: 72, br: 72, bl: 28 },
@@ -108,8 +123,9 @@ const getEyeConfig = (type: SlimeType, size: SlimeSize) => {
 
   const baseConfig: Record<string, { eyeSize: number; eyeGap: number; eyeTop: string; hasGlasses: boolean; glassesType?: string }> = {
     base: { eyeSize: 12, eyeGap: 24, eyeTop: '38%', hasGlasses: false },
-    fitness_coach: { eyeSize: 12, eyeGap: 26, eyeTop: '40%', hasGlasses: false },
+    fitness_coach: { eyeSize: 12, eyeGap: 24, eyeTop: '38%', hasGlasses: false }, // Same as base
     budget_helper: { eyeSize: 0, eyeGap: 0, eyeTop: '35%', hasGlasses: true, glassesType: 'round' },
+    finance: { eyeSize: 0, eyeGap: 0, eyeTop: '35%', hasGlasses: true, glassesType: 'round' }, // Same as budget_helper
     study_buddy: { eyeSize: 10, eyeGap: 20, eyeTop: '35%', hasGlasses: true, glassesType: 'square' },
   };
 
@@ -130,14 +146,16 @@ const getEyeConfig = (type: SlimeType, size: SlimeSize) => {
 const Eyes = ({
   eyeSize,
   eyeGap,
+  marginBottom = 4,
 }: {
   eyeSize: number;
   eyeGap: number;
+  marginBottom?: number;
 }) => {
   if (eyeSize === 0) return null;
 
   return (
-    <View style={[styles.eyesContainer, { gap: eyeGap }]}>
+    <View style={[styles.eyesContainer, { gap: eyeGap, marginBottom }]}>
       <View
         style={[
           styles.eye,
@@ -157,11 +175,14 @@ const Eyes = ({
 // Curved smile mouth
 const Mouth = ({ size }: { size: SlimeSize }) => {
   const sizeMultiplier = { xs: 0.3, small: 0.5, medium: 0.75, large: 1 }[size];
-  const mouthWidth = Math.round(16 * sizeMultiplier);
-  const mouthHeight = Math.round(6 * sizeMultiplier);
+  // Ensure minimum dimensions for the curve to be visible
+  const mouthWidth = Math.max(6, Math.round(16 * sizeMultiplier));
+  const mouthHeight = Math.max(4, Math.round(6 * sizeMultiplier));
+  const borderWidth = Math.max(1, Math.round(2 * sizeMultiplier));
+  const marginTop = Math.max(1, Math.round(2 * sizeMultiplier));
 
   return (
-    <View style={[styles.mouthContainer]}>
+    <View style={[styles.mouthContainer, { marginTop }]}>
       <View
         style={[
           styles.mouth,
@@ -170,6 +191,8 @@ const Mouth = ({ size }: { size: SlimeSize }) => {
             height: mouthHeight,
             borderBottomLeftRadius: mouthWidth,
             borderBottomRightRadius: mouthWidth,
+            borderWidth: borderWidth,
+            borderTopWidth: 0,
           }
         ]}
       />
@@ -199,18 +222,19 @@ const RoundGlasses = ({ size }: { size: SlimeSize }) => {
   const glassSize = Math.round(32 * sizeMultiplier);
   const bridgeWidth = Math.round(12 * sizeMultiplier);
   const bridgeHeight = Math.round(6 * sizeMultiplier);
-  const gap = Math.round(8 * sizeMultiplier);
+  const borderWidth = Math.max(1, Math.round(3 * sizeMultiplier));
+  const bridgeMargin = Math.max(1, Math.round(2 * sizeMultiplier));
 
   return (
     <View style={styles.glassesContainer}>
       {/* Left lens */}
-      <View style={[styles.roundLens, { width: glassSize, height: glassSize, borderRadius: glassSize / 2 }]}>
+      <View style={[styles.roundLens, { width: glassSize, height: glassSize, borderRadius: glassSize / 2, borderWidth }]}>
         <View style={[styles.glassPupil, { width: glassSize * 0.35, height: glassSize * 0.35, borderRadius: glassSize * 0.175 }]} />
       </View>
       {/* Bridge */}
-      <View style={[styles.glassBridge, { width: bridgeWidth, height: bridgeHeight, borderRadius: bridgeHeight / 2 }]} />
+      <View style={[styles.glassBridge, { width: bridgeWidth, height: bridgeHeight, borderRadius: bridgeHeight / 2, marginHorizontal: bridgeMargin }]} />
       {/* Right lens */}
-      <View style={[styles.roundLens, { width: glassSize, height: glassSize, borderRadius: glassSize / 2 }]}>
+      <View style={[styles.roundLens, { width: glassSize, height: glassSize, borderRadius: glassSize / 2, borderWidth }]}>
         <View style={[styles.glassPupil, { width: glassSize * 0.35, height: glassSize * 0.35, borderRadius: glassSize * 0.175 }]} />
       </View>
     </View>
@@ -314,12 +338,12 @@ export default function Slime({
 
   const renderAccessory = () => {
     switch (type) {
-      case 'fitness_coach':
-        return <Headband width={width} />;
       case 'budget_helper':
+      case 'finance':
         return <RoundGlasses size={size} />;
       case 'study_buddy':
         return <SquareGlasses size={size} />;
+      case 'fitness_coach':
       default:
         return null;
     }
@@ -338,25 +362,22 @@ export default function Slime({
 
       {/* Face layer */}
       <View style={styles.faceContainer}>
-        {/* Accessory - rendered first so it's behind face for headband */}
-        {!hideAccessories && type === 'fitness_coach' && renderAccessory()}
-
         {/* Eyes or glasses */}
-        {eyeConfig.hasGlasses && type === 'budget_helper' ? (
+        {eyeConfig.hasGlasses && (type === 'budget_helper' || type === 'finance') ? (
           <RoundGlasses size={size} />
         ) : eyeConfig.hasGlasses && type === 'study_buddy' ? (
           <>
-            <Eyes eyeSize={eyeConfig.eyeSize} eyeGap={eyeConfig.eyeGap} />
+            <Eyes eyeSize={eyeConfig.eyeSize} eyeGap={eyeConfig.eyeGap} marginBottom={Math.max(1, Math.round(4 * ({ xs: 0.3, small: 0.5, medium: 0.75, large: 1 }[size] || 0.75)))} />
             <View style={{ position: 'absolute', top: '32%' }}>
               <SquareGlasses size={size} />
             </View>
           </>
         ) : (
-          <Eyes eyeSize={eyeConfig.eyeSize} eyeGap={eyeConfig.eyeGap} />
+          <Eyes eyeSize={eyeConfig.eyeSize} eyeGap={eyeConfig.eyeGap} marginBottom={Math.max(1, Math.round(4 * ({ xs: 0.3, small: 0.5, medium: 0.75, large: 1 }[size] || 0.75)))} />
         )}
 
-        {/* Mouth - not for budget helper (glasses are the face) */}
-        {type !== 'budget_helper' && <Mouth size={size} />}
+        {/* Mouth - not for budget helper/finance (glasses are the face) */}
+        {type !== 'budget_helper' && type !== 'finance' && <Mouth size={size} />}
       </View>
     </View>
   );
@@ -395,20 +416,15 @@ const styles = StyleSheet.create({
   eyesContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
   },
   eye: {
     backgroundColor: '#1a1a1a',
   },
   // Mouth
-  mouthContainer: {
-    marginTop: 2,
-  },
+  mouthContainer: {},
   mouth: {
     backgroundColor: 'transparent',
-    borderWidth: 2,
     borderColor: 'rgba(26, 26, 26, 0.5)',
-    borderTopWidth: 0,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
   },
@@ -434,7 +450,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   roundLens: {
-    borderWidth: 3,
     borderColor: '#3d3d3d',
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',

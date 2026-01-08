@@ -26,7 +26,7 @@ export const AGENT_TYPES: AgentTypeConfig[] = [
     description: 'Budget tracking, spending insights, and savings goals',
     slimeType: 'budget_helper',
     defaultColor: 'skyBlue',
-    available: false,
+    available: true,
   },
   {
     id: 'study_buddy',
