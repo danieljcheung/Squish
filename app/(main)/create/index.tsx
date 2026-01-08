@@ -91,7 +91,7 @@ interface Question {
 const FITNESS_QUESTIONS: Question[] = [
   {
     id: 'goal',
-    text: "Hey there! I'm excited to be your fitness coach! 💪\n\nFirst up - what's your main fitness goal?",
+    text: "Hey there! I'm excited to be your fitness buddy! 💪\n\nFirst up - what's your main fitness goal?",
     type: 'choice',
     options: ['Lose weight', 'Build muscle', 'Get healthier', 'Train for an event'],
   },
@@ -121,7 +121,7 @@ const FITNESS_QUESTIONS: Question[] = [
   },
   {
     id: 'style',
-    text: 'How should I coach you? What style works best for you?',
+    text: 'What personality should I have?',
     type: 'choice',
     options: ['Tough love 🔥', 'Gentle encouragement 🌸', 'Balanced approach ⚖️'],
   },
@@ -394,34 +394,10 @@ const ColorSwatch = ({
   );
 };
 
-// Animated Slime for color picker with squish effect
-const AnimatedColorSlime = ({ color, slimeType }: { color: SlimeColor; slimeType: SlimeType }) => {
-  const squishY = useSharedValue(1);
-  const squishX = useSharedValue(1);
-
-  useEffect(() => {
-    // Squish animation when color changes
-    squishY.value = withSequence(
-      withTiming(0.85, { duration: 150, easing: Easing.out(Easing.ease) }),
-      withSpring(1, { damping: 8, stiffness: 300 })
-    );
-    squishX.value = withSequence(
-      withTiming(1.15, { duration: 150, easing: Easing.out(Easing.ease) }),
-      withSpring(1, { damping: 8, stiffness: 300 })
-    );
-  }, [color]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scaleY: squishY.value },
-      { scaleX: squishX.value },
-    ],
-  }));
-
+// Slime for color picker (no squish animation on color change)
+const ColorPickerSlime = ({ color, slimeType }: { color: SlimeColor; slimeType: SlimeType }) => {
   return (
-    <Animated.View style={animatedStyle}>
-      <Slime color={color} type={slimeType} size="large" animated hideAccessories />
-    </Animated.View>
+    <Slime color={color} type={slimeType} size="large" animated hideAccessories />
   );
 };
 
@@ -739,7 +715,7 @@ export default function CreateAgentScreen() {
   };
 
   const handleNameSubmit = () => {
-    const name = coachName.trim() || 'Coach';
+    const name = coachName.trim() || 'Squish';
     setCoachName(name);
     setPhase('transformation');
   };
@@ -921,14 +897,14 @@ export default function CreateAgentScreen() {
 
         {/* Content */}
         <View style={styles.colorPickerContent}>
-          <Text style={[styles.colorPickerTitle, { color: themeColors.text }]}>Choose your coach's color</Text>
+          <Text style={[styles.colorPickerTitle, { color: themeColors.text }]}>Choose your Squish's color</Text>
           <Text style={[styles.colorPickerSubtitle, { color: themeColors.textMuted }]}>
             Pick a color that matches your vibe!
           </Text>
 
-          {/* Animated Slime Preview */}
+          {/* Slime Preview */}
           <View style={styles.slimePreviewContainer}>
-            <AnimatedColorSlime color={selectedColor} slimeType={slimeType} />
+            <ColorPickerSlime color={selectedColor} slimeType={slimeType} />
           </View>
 
           {/* Color swatches */}
@@ -1014,7 +990,7 @@ export default function CreateAgentScreen() {
               style={[styles.nameInput, { backgroundColor: themeColors.surface, borderColor: themeColors.primary, color: themeColors.text }]}
               value={coachName}
               onChangeText={setCoachName}
-              placeholder="Coach"
+              placeholder="Squish"
               placeholderTextColor={themeColors.textMuted}
               autoFocus={false}
               returnKeyType="done"
