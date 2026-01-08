@@ -10,6 +10,7 @@ import Animated, {
   withDelay,
   Easing,
   interpolate,
+  SharedValue,
 } from 'react-native-reanimated';
 import { colors } from '@/constants/colors';
 
@@ -142,30 +143,42 @@ const getEyeConfig = (type: SlimeType, size: SlimeSize) => {
 // FACE COMPONENTS
 // ============================================
 
-// Eyes (static)
+// Eyes (with optional blink animation)
 const Eyes = ({
   eyeSize,
   eyeGap,
   marginBottom = 4,
+  blinkProgress,
 }: {
   eyeSize: number;
   eyeGap: number;
   marginBottom?: number;
+  blinkProgress?: SharedValue<number>;
 }) => {
   if (eyeSize === 0) return null;
 
+  const eyeStyle = useAnimatedStyle(() => {
+    if (!blinkProgress) return {};
+    const scaleY = interpolate(blinkProgress.value, [0, 1], [1, 0.1]);
+    return {
+      transform: [{ scaleY }],
+    };
+  });
+
   return (
     <View style={[styles.eyesContainer, { gap: eyeGap, marginBottom }]}>
-      <View
+      <Animated.View
         style={[
           styles.eye,
-          { width: eyeSize, height: eyeSize, borderRadius: eyeSize / 2 }
+          { width: eyeSize, height: eyeSize, borderRadius: eyeSize / 2 },
+          eyeStyle,
         ]}
       />
-      <View
+      <Animated.View
         style={[
           styles.eye,
-          { width: eyeSize, height: eyeSize, borderRadius: eyeSize / 2 }
+          { width: eyeSize, height: eyeSize, borderRadius: eyeSize / 2 },
+          eyeStyle,
         ]}
       />
     </View>
@@ -279,6 +292,9 @@ export default function Slime({
 
   // Animation values
   const morphProgress = useSharedValue(0);
+  const breathingProgress = useSharedValue(0);
+  const squishProgress = useSharedValue(0);
+  const blinkProgress = useSharedValue(0);
 
   useEffect(() => {
     if (!animated) return;
@@ -294,9 +310,39 @@ export default function Slime({
       false
     );
 
+    // Breathing animation - gentle scale pulse
+    breathingProgress.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 2000, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
+
+    // Idle squish - subtle X/Y scale variation (like jello settling)
+    squishProgress.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.sin) }),
+        withTiming(-1, { duration: 1200, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 1200, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      false
+    );
+
+    // Blinking animation - periodic blinks
+    const blinkInterval = setInterval(() => {
+      blinkProgress.value = withSequence(
+        withTiming(1, { duration: 80 }),
+        withDelay(50, withTiming(0, { duration: 80 }))
+      );
+    }, 3500 + Math.random() * 2000);
+
+    return () => clearInterval(blinkInterval);
   }, [animated]);
 
-  // Animated blob shape
+  // Animated blob shape with breathing and squish
   const blobStyle = useAnimatedStyle(() => {
     const v0 = morphVariants[0];
     const v1 = morphVariants[1];
@@ -318,6 +364,13 @@ export default function Slime({
       bl = interpolate(progress, [1, 2], [v1.bl, v2.bl]);
     }
 
+    // Breathing scale (subtle 4% expansion)
+    const breathScale = interpolate(breathingProgress.value, [0, 1], [1, 1.04]);
+
+    // Idle squish (subtle X/Y variation for organic feel)
+    const squishX = interpolate(squishProgress.value, [-1, 0, 1], [0.97, 1, 1.03]);
+    const squishY = interpolate(squishProgress.value, [-1, 0, 1], [1.03, 1, 0.97]);
+
     // Convert percentages to actual pixel values based on size
     const minDim = Math.min(width, height);
     return {
@@ -325,6 +378,11 @@ export default function Slime({
       borderTopRightRadius: (tr / 100) * minDim,
       borderBottomRightRadius: (br / 100) * minDim,
       borderBottomLeftRadius: (bl / 100) * minDim,
+      transform: [
+        { scale: breathScale },
+        { scaleX: squishX },
+        { scaleY: squishY },
+      ],
     };
   });
 
@@ -367,13 +425,13 @@ export default function Slime({
           <RoundGlasses size={size} />
         ) : eyeConfig.hasGlasses && type === 'study_buddy' ? (
           <>
-            <Eyes eyeSize={eyeConfig.eyeSize} eyeGap={eyeConfig.eyeGap} marginBottom={Math.max(1, Math.round(4 * ({ xs: 0.3, small: 0.5, medium: 0.75, large: 1 }[size] || 0.75)))} />
+            <Eyes eyeSize={eyeConfig.eyeSize} eyeGap={eyeConfig.eyeGap} marginBottom={Math.max(1, Math.round(4 * ({ xs: 0.3, small: 0.5, medium: 0.75, large: 1 }[size] || 0.75)))} blinkProgress={animated ? blinkProgress : undefined} />
             <View style={{ position: 'absolute', top: '32%' }}>
               <SquareGlasses size={size} />
             </View>
           </>
         ) : (
-          <Eyes eyeSize={eyeConfig.eyeSize} eyeGap={eyeConfig.eyeGap} marginBottom={Math.max(1, Math.round(4 * ({ xs: 0.3, small: 0.5, medium: 0.75, large: 1 }[size] || 0.75)))} />
+          <Eyes eyeSize={eyeConfig.eyeSize} eyeGap={eyeConfig.eyeGap} marginBottom={Math.max(1, Math.round(4 * ({ xs: 0.3, small: 0.5, medium: 0.75, large: 1 }[size] || 0.75)))} blinkProgress={animated ? blinkProgress : undefined} />
         )}
 
         {/* Mouth - not for budget helper/finance (glasses are the face) */}
