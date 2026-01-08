@@ -106,6 +106,41 @@ const AgentAvatar = ({
   );
 };
 
+// Helper to get friendly preview text for component messages
+const getMessagePreview = (content: string): string => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type) {
+      switch (parsed.type) {
+        case 'meal_analysis':
+          return '📸 Meal logged';
+        case 'bills_card':
+          return '📅 Bills overview';
+        case 'summary_card':
+          // Check if it's weekly or monthly
+          return parsed.period === 'month' ? '📊 Monthly summary' : '📊 Weekly summary';
+        case 'goals_card':
+          return '🎯 Savings goals';
+        case 'budget_card':
+          return '📊 Budget overview';
+        case 'log_confirmation':
+          if (parsed.logType === 'income') return '💰 Income logged';
+          if (parsed.logType === 'bill') return '📅 Bill logged';
+          return '💸 Expense logged';
+        case 'bill_confirmation':
+          return parsed.isSubscription ? '📱 Subscription added' : '📅 Bill added';
+        case 'receipt_analysis':
+          return '🧾 Receipt logged';
+        default:
+          return content;
+      }
+    }
+  } catch {
+    // Not JSON, return original content
+  }
+  return content;
+};
+
 // Squad agent card
 const AgentCard = ({ agent, index }: { agent: AgentWithLastMessage; index: number }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -132,7 +167,9 @@ const AgentCard = ({ agent, index }: { agent: AgentWithLastMessage; index: numbe
   const slimeColor = (agent.persona_json?.slime_color || 'mint') as SlimeColor;
 
   // Get message preview and time from last message
-  const lastMessageContent = agent.lastMessage?.content || getDefaultMessage(agent.type);
+  const lastMessageContent = agent.lastMessage?.content
+    ? getMessagePreview(agent.lastMessage.content)
+    : getDefaultMessage(agent.type);
   const lastMessageTime = formatRelativeTime(agent.lastMessage?.created_at);
 
   return (
