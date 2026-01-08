@@ -57,13 +57,13 @@ const JELLY_SPRING = {
   mass: 0.9,
 };
 
-// Flick/momentum physics
-const FRICTION = 0.985;           // Velocity multiplier per frame (0.98 = medium friction)
-const BOUNCE_DAMPING = 0.55;      // Velocity retained after bounce (0.55 = gooey, loses energy)
-const MIN_VELOCITY = 15;          // Stop physics below this velocity
-const FLICK_VELOCITY_SCALE = 0.8; // Scale down raw velocity for more control
-const IMPACT_SQUISH_DURATION = 80; // ms for wall squish animation
-const IMPACT_RECOVERY_DURATION = 200; // ms to recover from wall squish
+// Flick/momentum physics - heavy, dense slime feel
+const FRICTION = 0.992;           // Higher = slides more, slower decay (heavy blob)
+const BOUNCE_DAMPING = 0.32;      // Low = loses ~68% energy on bounce (thud, not spring)
+const MIN_VELOCITY = 20;          // Stop physics below this velocity
+const FLICK_VELOCITY_SCALE = 0.75; // Scale down raw velocity for more control
+const IMPACT_SQUISH_DURATION = 120; // ms for wall squish (longer = heavier impact)
+const IMPACT_RECOVERY_DURATION = 320; // ms to recover from wall squish (slower = more weight)
 
 interface InteractiveSlimeProps {
   containerWidth: number;
@@ -109,6 +109,18 @@ export default function InteractiveSlime({
   // Impact squish (compress against wall)
   const impactSquishX = useSharedValue(0); // -1 = left wall, +1 = right wall
   const impactSquishY = useSharedValue(0); // -1 = top wall, +1 = bottom wall
+
+  // Press squish (finger pressing down on slime)
+  const pressSquish = useSharedValue(0); // 0 = normal, 1 = fully pressed
+
+  // Easter egg: rapid tap explosion
+  const tapCount = useSharedValue(0);
+  const lastTapTime = useSharedValue(0);
+  const puffiness = useSharedValue(0); // 0 = normal, builds up with taps
+  const isExploding = useSharedValue(false);
+  const explosionProgress = useSharedValue(0); // 0 = normal, 1 = fully expanded
+  const TAP_THRESHOLD = 6; // Number of taps to trigger
+  const TAP_TIMEOUT = 400; // ms between taps before reset
 
   // Idle animations
   const breathingProgress = useSharedValue(0);
@@ -256,16 +268,15 @@ export default function InteractiveSlime({
       newX = bounds.minX;
       velocityX.value = -velocityX.value * BOUNCE_DAMPING;
       bounced = true;
-      // Trigger impact squish (compress horizontally, bulge vertically)
-      impactSquishX.value = -1;
+      // Trigger impact squish - heavy thud (no springy overshoot)
       impactSquishX.value = withSequence(
-        withTiming(-0.8, { duration: IMPACT_SQUISH_DURATION }),
-        withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.back(1.5)) })
+        withTiming(-1.0, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
       );
       // Edge collision visual
       edgeLeft.value = withSequence(
-        withTiming(0.6, { duration: IMPACT_SQUISH_DURATION }),
-        withTiming(0, { duration: IMPACT_RECOVERY_DURATION })
+        withTiming(0.8, { duration: IMPACT_SQUISH_DURATION }),
+        withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
       );
     }
 
@@ -275,12 +286,12 @@ export default function InteractiveSlime({
       velocityX.value = -velocityX.value * BOUNCE_DAMPING;
       bounced = true;
       impactSquishX.value = withSequence(
-        withTiming(0.8, { duration: IMPACT_SQUISH_DURATION }),
-        withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.back(1.5)) })
+        withTiming(1.0, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
       );
       edgeRight.value = withSequence(
-        withTiming(0.6, { duration: IMPACT_SQUISH_DURATION }),
-        withTiming(0, { duration: IMPACT_RECOVERY_DURATION })
+        withTiming(0.8, { duration: IMPACT_SQUISH_DURATION }),
+        withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
       );
     }
 
@@ -290,12 +301,12 @@ export default function InteractiveSlime({
       velocityY.value = -velocityY.value * BOUNCE_DAMPING;
       bounced = true;
       impactSquishY.value = withSequence(
-        withTiming(-0.8, { duration: IMPACT_SQUISH_DURATION }),
-        withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.back(1.5)) })
+        withTiming(-1.0, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
       );
       edgeTop.value = withSequence(
-        withTiming(0.6, { duration: IMPACT_SQUISH_DURATION }),
-        withTiming(0, { duration: IMPACT_RECOVERY_DURATION })
+        withTiming(0.8, { duration: IMPACT_SQUISH_DURATION }),
+        withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
       );
     }
 
@@ -305,22 +316,23 @@ export default function InteractiveSlime({
       velocityY.value = -velocityY.value * BOUNCE_DAMPING;
       bounced = true;
       impactSquishY.value = withSequence(
-        withTiming(0.8, { duration: IMPACT_SQUISH_DURATION }),
-        withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.back(1.5)) })
+        withTiming(1.0, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
       );
       edgeBottom.value = withSequence(
-        withTiming(0.6, { duration: IMPACT_SQUISH_DURATION }),
-        withTiming(0, { duration: IMPACT_RECOVERY_DURATION })
+        withTiming(0.8, { duration: IMPACT_SQUISH_DURATION }),
+        withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
       );
     }
 
-    // Trigger wobble on bounce
+    // Trigger wobble on bounce - heavy thud, not springy
     if (bounced) {
-      const impactIntensity = Math.min(0.8, speed / 600);
+      const impactIntensity = Math.min(0.9, speed / 500);
+      // Heavy splat: quick compress, slow recovery, minimal oscillation
       wobbleScale.value = withSequence(
-        withSpring(1 + impactIntensity * 0.08, { damping: 8, stiffness: 200 }),
-        withSpring(1 - impactIntensity * 0.04, WOBBLE_SPRING),
-        withSpring(1, WOBBLE_SPRING)
+        withTiming(1 - impactIntensity * 0.1, { duration: 60 }), // Quick squish on impact
+        withTiming(1 + impactIntensity * 0.03, { duration: 150, easing: Easing.out(Easing.quad) }), // Slow slight bulge
+        withSpring(1, { damping: 15, stiffness: 80 }) // Heavy settle, minimal bounce
       );
     }
 
@@ -379,6 +391,104 @@ export default function InteractiveSlime({
     );
   };
 
+  // Easter egg: reset after explosion animation
+  const resetAfterExplosion = () => {
+    setTimeout(() => {
+      isExploding.value = false;
+      tapCount.value = 0;
+    }, 1700);
+  };
+
+  // Easter egg: trigger explosion animation (called from JS)
+  const triggerExplosion = () => {
+    if (isExploding.value) return; // Already exploding
+
+    isExploding.value = true;
+
+    // Reset position to center for explosion
+    cancelAnimation(bodyX);
+    cancelAnimation(bodyY);
+    cancelAnimation(grabX);
+    cancelAnimation(grabY);
+    bodyX.value = withTiming(0, { duration: 100 });
+    bodyY.value = withTiming(0, { duration: 100 });
+    grabX.value = withTiming(0, { duration: 100 });
+    grabY.value = withTiming(0, { duration: 100 });
+
+    // Squish against all edges during expansion
+    edgeLeft.value = withSequence(
+      withDelay(200, withTiming(0.8, { duration: 150 })),
+      withDelay(600, withTiming(0, { duration: 600, easing: Easing.inOut(Easing.ease) }))
+    );
+    edgeRight.value = withSequence(
+      withDelay(200, withTiming(0.8, { duration: 150 })),
+      withDelay(600, withTiming(0, { duration: 600, easing: Easing.inOut(Easing.ease) }))
+    );
+    edgeTop.value = withSequence(
+      withDelay(200, withTiming(0.8, { duration: 150 })),
+      withDelay(600, withTiming(0, { duration: 600, easing: Easing.inOut(Easing.ease) }))
+    );
+    edgeBottom.value = withSequence(
+      withDelay(200, withTiming(0.8, { duration: 150 })),
+      withDelay(600, withTiming(0, { duration: 600, easing: Easing.inOut(Easing.ease) }))
+    );
+
+    // Explosion sequence: expand -> pulse -> contract
+    explosionProgress.value = withSequence(
+      // Phase 1: Explosion - expand to fill container (350ms)
+      withTiming(1, { duration: 350, easing: Easing.out(Easing.back(1.2)) }),
+      // Phase 2: Subtle pulse while expanded
+      withTiming(0.96, { duration: 150 }),
+      withTiming(1, { duration: 150 }),
+      withTiming(0.97, { duration: 150 }),
+      withTiming(1, { duration: 150 }),
+      // Phase 3: Contract back - ooze back together
+      withTiming(0, { duration: 800, easing: Easing.inOut(Easing.cubic) })
+    );
+
+    // Reset puffiness during contraction
+    puffiness.value = withDelay(900, withTiming(0, { duration: 400 }));
+
+    // Schedule reset after animation completes
+    resetAfterExplosion();
+  };
+
+  // Handle tap for easter egg (worklet)
+  const handleTap = () => {
+    'worklet';
+    if (isExploding.value) return; // Ignore taps during explosion
+
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapTime.value;
+
+    if (timeSinceLastTap > TAP_TIMEOUT) {
+      // Too long since last tap, reset counter
+      tapCount.value = 1;
+      puffiness.value = withSpring(0.1, { damping: 8, stiffness: 200 });
+    } else {
+      // Rapid tap! Increment counter
+      tapCount.value = tapCount.value + 1;
+
+      // Increase puffiness with each tap (builds up excitement)
+      const newPuffiness = Math.min(1, tapCount.value / TAP_THRESHOLD);
+      puffiness.value = withSpring(newPuffiness, { damping: 6, stiffness: 300 });
+
+      // Add extra wobble with each tap
+      const wobbleIntensity = 0.03 + (tapCount.value * 0.015);
+      wobbleScale.value = withSequence(
+        withTiming(1 + wobbleIntensity, { duration: 50 }),
+        withSpring(1, { damping: 6, stiffness: 200 })
+      );
+
+      // Check if threshold reached
+      if (tapCount.value >= TAP_THRESHOLD) {
+        runOnJS(triggerExplosion)();
+      }
+    }
+
+    lastTapTime.value = now;
+  };
+
   // Update edge collision
   const updateEdgeCollision = (x: number, y: number) => {
     'worklet';
@@ -412,6 +522,18 @@ export default function InteractiveSlime({
 
   // Pan gesture handler
   const panGesture = Gesture.Pan()
+    .onBegin(() => {
+      // onBegin fires immediately when finger touches down
+      // Track tap for easter egg
+      handleTap();
+
+      // Skip press squish if exploding
+      if (isExploding.value) return;
+
+      // Press squish - compress down like pressing a stress ball
+      cancelAnimation(pressSquish);
+      pressSquish.value = withTiming(1, { duration: 80, easing: Easing.out(Easing.quad) });
+    })
     .onStart(() => {
       isDragging.value = true;
       isFlicking.value = false; // Stop any flick physics
@@ -535,6 +657,11 @@ export default function InteractiveSlime({
       edgeBottom.value = withSpring(0, JELLY_SPRING);
 
       lastInteractionTime.value = Date.now();
+    })
+    .onFinalize(() => {
+      // onFinalize fires when finger lifts (whether dragged or not)
+      // Release press squish - spring back with small wobble
+      pressSquish.value = withSpring(0, { damping: 10, stiffness: 400 });
     });
 
   // Animated styles for the slime body
@@ -612,9 +739,32 @@ export default function InteractiveSlime({
     const impactBulgeX = 1 + Math.abs(impactSquishY.value) * 0.1;
     const impactBulgeY = 1 + Math.abs(impactSquishX.value) * 0.1;
 
+    // Press squish - finger pressing down compresses vertically, bulges horizontally
+    // Like pressing a stress ball from above
+    const pressCompressY = 1 - pressSquish.value * 0.15; // 15% vertical compression
+    const pressBulgeX = 1 + pressSquish.value * 0.08; // 8% horizontal bulge (volume preservation)
+
+    // Easter egg: puffiness (builds up with rapid taps)
+    const puffScale = 1 + puffiness.value * 0.25; // Up to 25% bigger when fully puffed
+
+    // Easter egg: explosion scale (fills container)
+    // Calculate how much to scale to fill the container
+    const explosionScaleX = interpolate(
+      explosionProgress.value,
+      [0, 1],
+      [1, (containerWidth / SLIME_WIDTH) * 1.1], // Slightly overflow for squish effect
+      Extrapolation.CLAMP
+    );
+    const explosionScaleY = interpolate(
+      explosionProgress.value,
+      [0, 1],
+      [1, (containerHeight / SLIME_HEIGHT) * 1.1],
+      Extrapolation.CLAMP
+    );
+
     // Combine all scale effects
-    let scaleX = breathScale * idleSquishX * directionalStretchX * horizontalSquish * horizontalBulge * wobbleScale.value * flightScaleX * flightCompressX * impactCompressX * impactBulgeX;
-    let scaleY = breathScale * idleSquishY * directionalStretchY * verticalSquish * verticalBulge * wobbleScale.value * flightScaleY * flightCompressY * impactCompressY * impactBulgeY;
+    let scaleX = breathScale * idleSquishX * directionalStretchX * horizontalSquish * horizontalBulge * wobbleScale.value * flightScaleX * flightCompressX * impactCompressX * impactBulgeX * pressBulgeX * puffScale * explosionScaleX;
+    let scaleY = breathScale * idleSquishY * directionalStretchY * verticalSquish * verticalBulge * wobbleScale.value * flightScaleY * flightCompressY * impactCompressY * impactBulgeY * pressCompressY * puffScale * explosionScaleY;
 
     // Organic morph
     const baseVariants = [
