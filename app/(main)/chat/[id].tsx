@@ -4,15 +4,15 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
   TextInput,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  RefreshControl,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Animated as RNAnimated,
+  ScrollView,
+  RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, {
@@ -53,6 +53,7 @@ import { BillsCard } from '@/components/chat/BillsCard';
 import { FinanceSummaryCard } from '@/components/chat/FinanceSummaryCard';
 import { SavingsGoalsCard } from '@/components/chat/SavingsGoalsCard';
 import { LogConfirmationCard } from '@/components/chat/LogConfirmationCard';
+import { BillConfirmationCard } from '@/components/chat/BillConfirmationCard';
 import { BudgetBreakdownCard } from '@/components/chat/BudgetBreakdownCard';
 import { CategoryExpensesSheet } from '@/components/ui/CategoryExpensesSheet';
 import { AddSavingsGoalSheet } from '@/components/ui/AddSavingsGoalSheet';
@@ -112,6 +113,21 @@ interface LogConfirmationMessage {
   description?: string;
   timestamp: string;
   receiptUrl?: string;
+}
+
+// Bill confirmation message data structure (for newly added bills)
+interface BillConfirmationMessage {
+  type: 'bill_confirmation';
+  name: string;
+  icon?: string;
+  amount: number;
+  category?: string;
+  frequency: 'weekly' | 'monthly' | 'yearly';
+  dueDay: number;
+  reminderDaysBefore?: number;
+  autoLog?: boolean;
+  isSubscription?: boolean;
+  timestamp: string;
 }
 
 // Helper to parse meal analysis from message content
@@ -185,6 +201,18 @@ const parseLogConfirmationMessage = (content: string): LogConfirmationMessage | 
     const parsed = JSON.parse(content);
     if (parsed && parsed.type === 'log_confirmation') {
       return parsed as LogConfirmationMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const parseBillConfirmationMessage = (content: string): BillConfirmationMessage | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'bill_confirmation') {
+      return parsed as BillConfirmationMessage;
     }
     return null;
   } catch {
@@ -316,6 +344,9 @@ const MessageBubble = ({
 
   // Check if this is a log confirmation message
   const logConfirmation = !isUser ? parseLogConfirmationMessage(message.content) : null;
+
+  // Check if this is a bill confirmation message
+  const billConfirmation = !isUser ? parseBillConfirmationMessage(message.content) : null;
 
   // Render meal analysis card for assistant messages
   if (mealAnalysis) {
@@ -474,6 +505,40 @@ const MessageBubble = ({
             currencySymbol={currencySymbol}
             savingsGoals={savingsGoalsForAllocation}
             onAllocateToSavings={onAllocateToSavings}
+          />
+          <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Render bill confirmation card for assistant messages
+  if (billConfirmation) {
+    return (
+      <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+        <View style={styles.avatarSmall}>
+          <AgentSlime agent={agent} size={32} />
+        </View>
+        <View style={styles.billsCardWrapper}>
+          <BillConfirmationCard
+            data={{
+              name: billConfirmation.name,
+              icon: billConfirmation.icon,
+              amount: billConfirmation.amount,
+              category: billConfirmation.category,
+              frequency: billConfirmation.frequency,
+              dueDay: billConfirmation.dueDay,
+              reminderDaysBefore: billConfirmation.reminderDaysBefore,
+              autoLog: billConfirmation.autoLog,
+              isSubscription: billConfirmation.isSubscription,
+              timestamp: billConfirmation.timestamp,
+            }}
+            currencySymbol={currencySymbol}
           />
           <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
             {new Date(message.created_at).toLocaleTimeString([], {
@@ -679,7 +744,6 @@ export default function ChatScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [errorMessageId, setErrorMessageId] = useState<string | null>(null);
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showWaterSheet, setShowWaterSheet] = useState(false);
   const [confirmedMealId, setConfirmedMealId] = useState<string | null>(null);
@@ -699,6 +763,7 @@ export default function ChatScreen() {
   const [selectedSavingsGoal, setSelectedSavingsGoal] = useState<any>(null);
 
   // Scroll position tracking
+  const [refreshing, setRefreshing] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showNewMessages, setShowNewMessages] = useState(false);
   const [lastSeenMessageCount, setLastSeenMessageCount] = useState<number | null>(null);
@@ -1067,12 +1132,21 @@ export default function ChatScreen() {
         duration: 2000,
       });
 
-      // Send a confirmation message
-      const frequencyText = bill.frequency === 'monthly' ? '/month' : bill.frequency === 'yearly' ? '/year' : '/week';
-      const typeText = bill.isSubscription ? 'subscription' : 'bill';
-      await saveAssistantMessage(
-        `Added ${bill.name} as a recurring ${typeText} - ${getCurrencySymbol()}${bill.amount.toFixed(2)}${frequencyText}`
-      );
+      // Send a bill confirmation message as structured JSON
+      const billConfirmation: BillConfirmationMessage = {
+        type: 'bill_confirmation',
+        name: bill.name,
+        icon: bill.icon,
+        amount: bill.amount,
+        category: bill.category,
+        frequency: bill.frequency,
+        dueDay: bill.dueDay,
+        reminderDaysBefore: bill.reminderDaysBefore,
+        autoLog: bill.autoLog,
+        isSubscription: bill.isSubscription,
+        timestamp: new Date().toISOString(),
+      };
+      await saveAssistantMessage(JSON.stringify(billConfirmation));
     } else {
       await triggerHaptic('error');
       showError('Failed to add bill');
@@ -1932,9 +2006,9 @@ export default function ChatScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={themeColors.primary}
-            colors={[themeColors.primary]}
             progressViewOffset={HEADER_HEIGHT}
+            colors={[themeColors.primary]}
+            tintColor={themeColors.primary}
           />
         }
       >

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,11 @@ import {
   RefreshControl,
   Animated,
   Easing,
+  LayoutChangeEvent,
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Svg, { Path } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
@@ -20,7 +22,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useAgents, AgentWithLastMessage } from '@/hooks/useAgent';
 import { useToast } from '@/context/ToastContext';
-import { Slime, ProfileSlime, SlimeColor, SlimeType } from '@/components/slime';
+import { Slime, ProfileSlime, InteractiveSlime, SlimeColor, SlimeType } from '@/components/slime';
+
 
 // Helper to format relative time
 const formatRelativeTime = (dateString: string | undefined): string => {
@@ -58,12 +61,32 @@ const ChevronRightIcon = ({ color = '#d1d5db' }: { color?: string }) => (
 
 
 
-// Hero slime using unified component
+// Hero slime using unified component (static fallback)
 const HeroSlime = () => (
   <View style={styles.heroSlimeContainer}>
     <Slime color="mint" type="base" size="large" animated />
   </View>
 );
+
+// Interactive hero slime with physics
+const InteractiveHeroSlime = ({
+  containerWidth,
+  containerHeight,
+}: {
+  containerWidth: number;
+  containerHeight: number;
+}) => {
+  if (containerWidth === 0 || containerHeight === 0) {
+    return <HeroSlime />;
+  }
+
+  return (
+    <InteractiveSlime
+      containerWidth={containerWidth}
+      containerHeight={containerHeight}
+    />
+  );
+};
 
 // Agent avatar using ProfileSlime with circular accent background
 const AgentAvatar = ({
@@ -161,41 +184,107 @@ const MorphButton = () => (
   </Pressable>
 );
 
+// Simple hero text (masked version was causing crashes with MaskedView + Reanimated)
+const HeroText = ({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) => {
+  const { colors: themeColors } = useTheme();
+
+  return (
+    <View style={styles.emptyTextContainer} pointerEvents="none">
+      <Text style={[styles.emptyTitle, { color: themeColors.text }]}>{title}</Text>
+      <Text style={[styles.emptySubtitle, { color: themeColors.textMuted }]}>{subtitle}</Text>
+    </View>
+  );
+};
+
 // Empty state
 const EmptyState = () => {
   const { colors: themeColors } = useTheme();
+  const [cardSize, setCardSize] = useState({ width: 0, height: 0 });
+
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setCardSize({ width, height });
+  }, []);
+
   return (
-    <View style={[styles.emptyCard, { backgroundColor: themeColors.surface }]}>
-      <View style={[styles.cardBlob, styles.cardBlobTopRight]} />
-      <View style={[styles.cardBlob, styles.cardBlobBottomLeft]} />
-      <View style={styles.emptyContent}>
-        <HeroSlime />
-        <View style={styles.emptyTextContainer}>
-          <Text style={[styles.emptyTitle, { color: themeColors.text }]}>Meet Squish</Text>
-          <Text style={[styles.emptySubtitle, { color: themeColors.textMuted }]}>Your base slime helper ready to morph!</Text>
+    <GestureHandlerRootView style={{ flex: 0 }}>
+      <View
+        style={[styles.emptyCard, { backgroundColor: themeColors.surface }]}
+        onLayout={handleLayout}
+      >
+        <View style={[styles.cardBlob, styles.cardBlobTopRight]} />
+        <View style={[styles.cardBlob, styles.cardBlobBottomLeft]} />
+
+        {/* Slime layer - positioned absolutely to move freely across entire card */}
+        <View style={styles.slimeLayer} pointerEvents="box-none">
+          <InteractiveHeroSlime
+            containerWidth={cardSize.width}
+            containerHeight={cardSize.height}
+          />
         </View>
-        <MorphButton />
+
+        {/* Content layer */}
+        <View style={styles.emptyContent} pointerEvents="box-none">
+          <View style={styles.slimePlaceholder} pointerEvents="none" />
+
+          <HeroText
+            title="Meet Squish"
+            subtitle="Your base slime helper ready to morph!"
+          />
+
+          <MorphButton />
+        </View>
       </View>
-    </View>
+    </GestureHandlerRootView>
   );
 };
 
 // Hero card when agents exist
 const HeroCard = () => {
   const { colors: themeColors } = useTheme();
+  const [cardSize, setCardSize] = useState({ width: 0, height: 0 });
+
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setCardSize({ width, height });
+  }, []);
+
   return (
-    <View style={[styles.heroCard, { backgroundColor: themeColors.surface }]}>
-      <View style={[styles.cardBlob, styles.cardBlobTopRight]} />
-      <View style={[styles.cardBlob, styles.cardBlobBottomLeft]} />
-      <View style={styles.heroContent}>
-        <HeroSlime />
-        <View style={styles.heroTextContainer}>
-          <Text style={[styles.heroTitle, { color: themeColors.text }]}>Meet Squish</Text>
-          <Text style={[styles.heroSubtitle, { color: themeColors.textMuted }]}>Your base slime helper ready to morph!</Text>
+    <GestureHandlerRootView style={{ flex: 0 }}>
+      <View
+        style={[styles.heroCard, { backgroundColor: themeColors.surface }]}
+        onLayout={handleLayout}
+      >
+        <View style={[styles.cardBlob, styles.cardBlobTopRight]} />
+        <View style={[styles.cardBlob, styles.cardBlobBottomLeft]} />
+
+        {/* Slime layer - positioned absolutely to move freely across entire card */}
+        <View style={styles.slimeLayer} pointerEvents="box-none">
+          <InteractiveHeroSlime
+            containerWidth={cardSize.width}
+            containerHeight={cardSize.height}
+          />
         </View>
-        <MorphButton />
+
+        {/* Content layer */}
+        <View style={styles.heroContent} pointerEvents="box-none">
+          <View style={styles.slimePlaceholder} pointerEvents="none" />
+
+          <HeroText
+            title="Meet Squish"
+            subtitle="Your base slime helper ready to morph!"
+          />
+
+          <MorphButton />
+        </View>
       </View>
-    </View>
+    </GestureHandlerRootView>
   );
 };
 
@@ -230,13 +319,13 @@ export default function HomeScreen() {
   const { colors: themeColors } = useTheme();
   const { agents, loading, error, refetch } = useAgents();
   const { showError } = useToast();
-  const [refreshing, setRefreshing] = useState(false);
-
   useEffect(() => {
     if (error && !loading) {
       showError(error, refetch);
     }
   }, [error, loading]);
+
+  const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -432,6 +521,16 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   heroSlimeContainer: {
+    marginBottom: spacing.lg,
+  },
+  slimeLayer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  slimePlaceholder: {
+    height: 128,
     marginBottom: spacing.lg,
   },
   heroTextContainer: {
