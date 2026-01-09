@@ -290,7 +290,6 @@ const parsePendingMeal = (content: string): PendingMealMessage | null => {
   try {
     const parsed = JSON.parse(content);
     if (parsed && parsed.type === 'pending_meal') {
-      console.log('[parsePendingMeal] Parsed meal, confirmed:', parsed.confirmed);
       return parsed as PendingMealMessage;
     }
     return null;
