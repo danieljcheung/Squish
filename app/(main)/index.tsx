@@ -72,9 +72,13 @@ const HeroSlime = () => (
 const InteractiveHeroSlime = ({
   containerWidth,
   containerHeight,
+  onGestureStart,
+  onGestureEnd,
 }: {
   containerWidth: number;
   containerHeight: number;
+  onGestureStart?: () => void;
+  onGestureEnd?: () => void;
 }) => {
   if (containerWidth === 0 || containerHeight === 0) {
     return <HeroSlime />;
@@ -84,6 +88,8 @@ const InteractiveHeroSlime = ({
     <InteractiveSlime
       containerWidth={containerWidth}
       containerHeight={containerHeight}
+      onGestureStart={onGestureStart}
+      onGestureEnd={onGestureEnd}
     />
   );
 };
@@ -240,7 +246,13 @@ const HeroText = ({
 };
 
 // Empty state
-const EmptyState = () => {
+const EmptyState = ({
+  onGestureStart,
+  onGestureEnd,
+}: {
+  onGestureStart?: () => void;
+  onGestureEnd?: () => void;
+}) => {
   const { colors: themeColors } = useTheme();
   const [cardSize, setCardSize] = useState({ width: 0, height: 0 });
 
@@ -254,6 +266,9 @@ const EmptyState = () => {
       <View
         style={[styles.emptyCard, { backgroundColor: themeColors.surface }]}
         onLayout={handleLayout}
+        onTouchStart={onGestureStart}
+        onTouchEnd={onGestureEnd}
+        onTouchCancel={onGestureEnd}
       >
         <View style={[styles.cardBlob, styles.cardBlobTopRight]} />
         <View style={[styles.cardBlob, styles.cardBlobBottomLeft]} />
@@ -283,7 +298,13 @@ const EmptyState = () => {
 };
 
 // Hero card when agents exist
-const HeroCard = () => {
+const HeroCard = ({
+  onGestureStart,
+  onGestureEnd,
+}: {
+  onGestureStart?: () => void;
+  onGestureEnd?: () => void;
+}) => {
   const { colors: themeColors } = useTheme();
   const [cardSize, setCardSize] = useState({ width: 0, height: 0 });
 
@@ -297,6 +318,9 @@ const HeroCard = () => {
       <View
         style={[styles.heroCard, { backgroundColor: themeColors.surface }]}
         onLayout={handleLayout}
+        onTouchStart={onGestureStart}
+        onTouchEnd={onGestureEnd}
+        onTouchCancel={onGestureEnd}
       >
         <View style={[styles.cardBlob, styles.cardBlobTopRight]} />
         <View style={[styles.cardBlob, styles.cardBlobBottomLeft]} />
@@ -363,12 +387,22 @@ export default function HomeScreen() {
   }, [error, loading]);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [isSlimeGestureActive, setIsSlimeGestureActive] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
   };
+
+  // Callbacks to control scroll when interacting with slime
+  const handleSlimeGestureStart = useCallback(() => {
+    setIsSlimeGestureActive(true);
+  }, []);
+
+  const handleSlimeGestureEnd = useCallback(() => {
+    setIsSlimeGestureActive(false);
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
@@ -399,20 +433,28 @@ export default function HomeScreen() {
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        scrollEnabled={!isSlimeGestureActive}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={themeColors.primary}
             colors={[themeColors.primary]}
+            enabled={!isSlimeGestureActive}
           />
         }
       >
         {/* Hero Section */}
         {agents.length === 0 && !loading ? (
-          <EmptyState />
+          <EmptyState
+            onGestureStart={handleSlimeGestureStart}
+            onGestureEnd={handleSlimeGestureEnd}
+          />
         ) : (
-          <HeroCard />
+          <HeroCard
+            onGestureStart={handleSlimeGestureStart}
+            onGestureEnd={handleSlimeGestureEnd}
+          />
         )}
 
         {/* Your Squad Section */}

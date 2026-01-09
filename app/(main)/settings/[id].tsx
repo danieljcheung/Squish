@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
+import { CommonActions, useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
@@ -181,6 +182,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors: themeColors, isDarkMode } = useTheme();
+  const navigation = useNavigation();
   const { agent, loading, error, updateAgent, deleteAgent, refetch } = useAgent(id);
   const { showSuccess, showError, showToast } = useToast();
 
@@ -373,7 +375,13 @@ export default function SettingsScreen() {
         message: `${name} has been deleted`,
         duration: 3000,
       });
-      router.replace('/(main)');
+      // Reset navigation stack to home only - removes deleted agent's chat from history
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'index' }],
+        })
+      );
     }
   };
 

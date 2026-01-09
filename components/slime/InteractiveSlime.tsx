@@ -68,11 +68,15 @@ const IMPACT_RECOVERY_DURATION = 320; // ms to recover from wall squish (slower 
 interface InteractiveSlimeProps {
   containerWidth: number;
   containerHeight: number;
+  onGestureStart?: () => void;
+  onGestureEnd?: () => void;
 }
 
 export default function InteractiveSlime({
   containerWidth,
   containerHeight,
+  onGestureStart,
+  onGestureEnd,
 }: InteractiveSlimeProps) {
   // GRAB POINT - where finger is pulling (follows finger directly)
   const grabX = useSharedValue(0);
@@ -121,6 +125,49 @@ export default function InteractiveSlime({
   const explosionProgress = useSharedValue(0); // 0 = normal, 1 = fully expanded
   const TAP_THRESHOLD = 6; // Number of taps to trigger
   const TAP_TIMEOUT = 400; // ms between taps before reset
+
+  // Easter egg: two-finger pull apart (split)
+  const isPinching = useSharedValue(false);
+  const isSplit = useSharedValue(false);
+  const pinchScale = useSharedValue(1);
+  const pinchCenterX = useSharedValue(0);
+  const pinchCenterY = useSharedValue(0);
+  const stretchDistance = useSharedValue(0); // Distance between fingers
+  const SPLIT_THRESHOLD = 180; // px apart to trigger split
+
+  // Split slime positions (two smaller slimes after split)
+  const slime1X = useSharedValue(0);
+  const slime1Y = useSharedValue(0);
+  const slime1VelX = useSharedValue(0);
+  const slime1VelY = useSharedValue(0);
+  const slime2X = useSharedValue(0);
+  const slime2Y = useSharedValue(0);
+  const slime2VelX = useSharedValue(0);
+  const slime2VelY = useSharedValue(0);
+  const splitProgress = useSharedValue(0); // 0 = together, 1 = fully split
+  const mergeProgress = useSharedValue(0); // 0 = split, 1 = merged back
+
+  // Merge animation state
+  const mergePhase = useSharedValue(0); // 0=bouncing, 1=crawling, 2=approaching, 3=contact, 4=merged
+  const crawlProgress = useSharedValue(0); // 0-1 cycles for inchworm motion
+  const slime1CrawlStretch = useSharedValue(1); // Stretch factor during crawl
+  const slime2CrawlStretch = useSharedValue(1);
+  const bridgeProgress = useSharedValue(0); // 0=no bridge, 1=fully connected
+  const MINI_SLIME_SCALE = 0.5; // Exactly 50% of original size
+
+  // Split slime 1 deformation state
+  const slime1ImpactX = useSharedValue(0);
+  const slime1ImpactY = useSharedValue(0);
+  const slime1Wobble = useSharedValue(1);
+  const slime1FlightX = useSharedValue(0);
+  const slime1FlightY = useSharedValue(0);
+
+  // Split slime 2 deformation state
+  const slime2ImpactX = useSharedValue(0);
+  const slime2ImpactY = useSharedValue(0);
+  const slime2Wobble = useSharedValue(1);
+  const slime2FlightX = useSharedValue(0);
+  const slime2FlightY = useSharedValue(0)
 
   // Idle animations
   const breathingProgress = useSharedValue(0);
@@ -538,6 +585,11 @@ export default function InteractiveSlime({
       isDragging.value = true;
       isFlicking.value = false; // Stop any flick physics
 
+      // Notify parent that gesture started (for scroll blocking)
+      if (onGestureStart) {
+        runOnJS(onGestureStart)();
+      }
+
       // Cancel any ongoing animations
       cancelAnimation(grabX);
       cancelAnimation(grabY);
@@ -662,7 +714,416 @@ export default function InteractiveSlime({
       // onFinalize fires when finger lifts (whether dragged or not)
       // Release press squish - spring back with small wobble
       pressSquish.value = withSpring(0, { damping: 10, stiffness: 400 });
+
+      // Notify parent that gesture ended (for scroll unblocking)
+      if (onGestureEnd) {
+        runOnJS(onGestureEnd)();
+      }
     });
+
+  // Trigger split animation
+  const triggerSplit = () => {
+    'worklet';
+    if (isSplit.value) return;
+
+    isSplit.value = true;
+    splitProgress.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.back(1.5)) });
+
+    // Position the two slimes where the stretch ended
+    const offsetX = stretchDistance.value * 0.3;
+    slime1X.value = bodyX.value - offsetX;
+    slime1Y.value = bodyY.value;
+    slime2X.value = bodyX.value + offsetX;
+    slime2Y.value = bodyY.value;
+
+    // Give them velocity to bounce apart
+    slime1VelX.value = -150;
+    slime1VelY.value = (Math.random() - 0.5) * 100;
+    slime2VelX.value = 150;
+    slime2VelY.value = (Math.random() - 0.5) * 100;
+  };
+
+  // Pinch gesture for two-finger stretch
+  const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      if (isSplit.value || isExploding.value) return;
+      isPinching.value = true;
+      stretchDistance.value = 0;
+
+      // Notify parent that gesture started
+      if (onGestureStart) {
+        runOnJS(onGestureStart)();
+      }
+    })
+    .onUpdate((event) => {
+      if (isSplit.value || isExploding.value) return;
+
+      // Track stretch distance based on scale
+      // Scale of 1 = fingers at starting distance, >1 = fingers spreading apart
+      const baseDistance = 60; // Starting finger distance approximation
+      stretchDistance.value = baseDistance * (event.scale - 1) * 2;
+      pinchScale.value = event.scale;
+      pinchCenterX.value = event.focalX - containerWidth / 2;
+      pinchCenterY.value = event.focalY - containerHeight / 2;
+
+      // Check if we've hit the split threshold
+      if (stretchDistance.value > SPLIT_THRESHOLD) {
+        triggerSplit();
+      }
+    })
+    .onEnd(() => {
+      isPinching.value = false;
+
+      if (!isSplit.value) {
+        // Didn't split - snap back
+        stretchDistance.value = withSpring(0, SNAPBACK_SPRING);
+        pinchScale.value = withSpring(1, SNAPBACK_SPRING);
+
+        // Trigger wobble
+        wobbleScale.value = withSequence(
+          withTiming(0.92, { duration: 80 }),
+          withSpring(1, WOBBLE_SPRING)
+        );
+      } else {
+        // Start in bouncing phase - physics callback will transition to crawl when settled
+        mergePhase.value = 0;
+        crawlProgress.value = 0;
+        bridgeProgress.value = 0;
+        slime1CrawlStretch.value = 1;
+        slime2CrawlStretch.value = 1;
+      }
+
+      // Notify parent that gesture ended
+      if (onGestureEnd) {
+        runOnJS(onGestureEnd)();
+      }
+    });
+
+  // Compose gestures - pinch takes priority when two fingers detected
+  const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
+
+  // Split slime physics simulation - uses same constants as main slime
+  useFrameCallback(() => {
+    if (!isSplit.value) return;
+
+    const dt = 1 / 60;
+    const splitFriction = FRICTION;
+    const splitBounceDamping = BOUNCE_DAMPING;
+    const smallBounds = {
+      minX: bounds.minX + 20,
+      maxX: bounds.maxX - 20,
+      minY: bounds.minY + 15,
+      maxY: bounds.maxY - 15,
+    };
+
+    // Calculate distance between slimes
+    const dx = slime2X.value - slime1X.value;
+    const dy = slime2Y.value - slime1Y.value;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const nx = dist > 0 ? dx / dist : 1;
+    const ny = dist > 0 ? dy / dist : 0;
+
+    // Phase 0: Bouncing - normal physics until velocities settle
+    if (mergePhase.value === 0) {
+      // Update slime 1 velocity and position
+      slime1VelX.value *= splitFriction;
+      slime1VelY.value *= splitFriction;
+      slime1X.value += slime1VelX.value * dt;
+      slime1Y.value += slime1VelY.value * dt;
+
+      // Flight deformation for slime 1
+      const speed1 = Math.sqrt(slime1VelX.value ** 2 + slime1VelY.value ** 2);
+      if (speed1 > MIN_VELOCITY) {
+        slime1FlightX.value = (slime1VelX.value / speed1) * Math.min(1, speed1 / 600) * 0.15;
+        slime1FlightY.value = (slime1VelY.value / speed1) * Math.min(1, speed1 / 600) * 0.15;
+      } else {
+        slime1FlightX.value *= 0.9;
+        slime1FlightY.value *= 0.9;
+      }
+
+      // Bounce slime 1 off walls
+      if (slime1X.value < smallBounds.minX) {
+        slime1X.value = smallBounds.minX;
+        slime1VelX.value = Math.abs(slime1VelX.value) * splitBounceDamping;
+        slime1ImpactX.value = withSequence(
+          withTiming(-1, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
+        );
+        slime1Wobble.value = withSequence(
+          withTiming(1 - Math.min(0.15, speed1 / 800), { duration: 60 }),
+          withSpring(1, { damping: 15, stiffness: 80 })
+        );
+      } else if (slime1X.value > smallBounds.maxX) {
+        slime1X.value = smallBounds.maxX;
+        slime1VelX.value = -Math.abs(slime1VelX.value) * splitBounceDamping;
+        slime1ImpactX.value = withSequence(
+          withTiming(1, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
+        );
+        slime1Wobble.value = withSequence(
+          withTiming(1 - Math.min(0.15, speed1 / 800), { duration: 60 }),
+          withSpring(1, { damping: 15, stiffness: 80 })
+        );
+      }
+      if (slime1Y.value < smallBounds.minY) {
+        slime1Y.value = smallBounds.minY;
+        slime1VelY.value = Math.abs(slime1VelY.value) * splitBounceDamping;
+        slime1ImpactY.value = withSequence(
+          withTiming(-1, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
+        );
+        slime1Wobble.value = withSequence(
+          withTiming(1 - Math.min(0.15, speed1 / 800), { duration: 60 }),
+          withSpring(1, { damping: 15, stiffness: 80 })
+        );
+      } else if (slime1Y.value > smallBounds.maxY) {
+        slime1Y.value = smallBounds.maxY;
+        slime1VelY.value = -Math.abs(slime1VelY.value) * splitBounceDamping;
+        slime1ImpactY.value = withSequence(
+          withTiming(1, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
+        );
+        slime1Wobble.value = withSequence(
+          withTiming(1 - Math.min(0.15, speed1 / 800), { duration: 60 }),
+          withSpring(1, { damping: 15, stiffness: 80 })
+        );
+      }
+
+      // Update slime 2 velocity and position
+      slime2VelX.value *= splitFriction;
+      slime2VelY.value *= splitFriction;
+      slime2X.value += slime2VelX.value * dt;
+      slime2Y.value += slime2VelY.value * dt;
+
+      // Flight deformation for slime 2
+      const speed2 = Math.sqrt(slime2VelX.value ** 2 + slime2VelY.value ** 2);
+      if (speed2 > MIN_VELOCITY) {
+        slime2FlightX.value = (slime2VelX.value / speed2) * Math.min(1, speed2 / 600) * 0.15;
+        slime2FlightY.value = (slime2VelY.value / speed2) * Math.min(1, speed2 / 600) * 0.15;
+      } else {
+        slime2FlightX.value *= 0.9;
+        slime2FlightY.value *= 0.9;
+      }
+
+      // Bounce slime 2 off walls
+      if (slime2X.value < smallBounds.minX) {
+        slime2X.value = smallBounds.minX;
+        slime2VelX.value = Math.abs(slime2VelX.value) * splitBounceDamping;
+        slime2ImpactX.value = withSequence(
+          withTiming(-1, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
+        );
+        slime2Wobble.value = withSequence(
+          withTiming(1 - Math.min(0.15, speed2 / 800), { duration: 60 }),
+          withSpring(1, { damping: 15, stiffness: 80 })
+        );
+      } else if (slime2X.value > smallBounds.maxX) {
+        slime2X.value = smallBounds.maxX;
+        slime2VelX.value = -Math.abs(slime2VelX.value) * splitBounceDamping;
+        slime2ImpactX.value = withSequence(
+          withTiming(1, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
+        );
+        slime2Wobble.value = withSequence(
+          withTiming(1 - Math.min(0.15, speed2 / 800), { duration: 60 }),
+          withSpring(1, { damping: 15, stiffness: 80 })
+        );
+      }
+      if (slime2Y.value < smallBounds.minY) {
+        slime2Y.value = smallBounds.minY;
+        slime2VelY.value = Math.abs(slime2VelY.value) * splitBounceDamping;
+        slime2ImpactY.value = withSequence(
+          withTiming(-1, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
+        );
+        slime2Wobble.value = withSequence(
+          withTiming(1 - Math.min(0.15, speed2 / 800), { duration: 60 }),
+          withSpring(1, { damping: 15, stiffness: 80 })
+        );
+      } else if (slime2Y.value > smallBounds.maxY) {
+        slime2Y.value = smallBounds.maxY;
+        slime2VelY.value = -Math.abs(slime2VelY.value) * splitBounceDamping;
+        slime2ImpactY.value = withSequence(
+          withTiming(1, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
+        );
+        slime2Wobble.value = withSequence(
+          withTiming(1 - Math.min(0.15, speed2 / 800), { duration: 60 }),
+          withSpring(1, { damping: 15, stiffness: 80 })
+        );
+      }
+
+      // Collision between the two slimes
+      const minDist = 70; // 50% scale collision radius
+      if (dist < minDist && dist > 0) {
+        const overlap = minDist - dist;
+
+        // Push apart
+        slime1X.value -= nx * overlap * 0.5;
+        slime1Y.value -= ny * overlap * 0.5;
+        slime2X.value += nx * overlap * 0.5;
+        slime2Y.value += ny * overlap * 0.5;
+
+        // Collision response
+        const relVelX = slime2VelX.value - slime1VelX.value;
+        const relVelY = slime2VelY.value - slime1VelY.value;
+        const relVelDot = relVelX * nx + relVelY * ny;
+
+        if (relVelDot < 0) {
+          const impulse = relVelDot * (1 + splitBounceDamping);
+          slime1VelX.value += impulse * nx * 0.5;
+          slime1VelY.value += impulse * ny * 0.5;
+          slime2VelX.value -= impulse * nx * 0.5;
+          slime2VelY.value -= impulse * ny * 0.5;
+
+          const impactIntensity = Math.min(1, Math.abs(relVelDot) / 300);
+          if (Math.abs(nx) > Math.abs(ny)) {
+            slime1ImpactX.value = withSequence(
+              withTiming(nx * impactIntensity, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+              withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
+            );
+            slime2ImpactX.value = withSequence(
+              withTiming(-nx * impactIntensity, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+              withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
+            );
+          } else {
+            slime1ImpactY.value = withSequence(
+              withTiming(ny * impactIntensity, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+              withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
+            );
+            slime2ImpactY.value = withSequence(
+              withTiming(-ny * impactIntensity, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
+              withTiming(0, { duration: IMPACT_RECOVERY_DURATION, easing: Easing.out(Easing.cubic) })
+            );
+          }
+
+          const collisionSpeed = Math.abs(relVelDot);
+          slime1Wobble.value = withSequence(
+            withTiming(1 - Math.min(0.12, collisionSpeed / 600), { duration: 60 }),
+            withTiming(1 + Math.min(0.04, collisionSpeed / 2000), { duration: 150, easing: Easing.out(Easing.quad) }),
+            withSpring(1, { damping: 15, stiffness: 80 })
+          );
+          slime2Wobble.value = withSequence(
+            withTiming(1 - Math.min(0.12, collisionSpeed / 600), { duration: 60 }),
+            withTiming(1 + Math.min(0.04, collisionSpeed / 2000), { duration: 150, easing: Easing.out(Easing.quad) }),
+            withSpring(1, { damping: 15, stiffness: 80 })
+          );
+        }
+      }
+
+      // Check if settled - transition to crawling phase
+      const totalSpeed = speed1 + speed2;
+      if (totalSpeed < MIN_VELOCITY * 2) {
+        mergePhase.value = 1;
+        crawlProgress.value = 0;
+      }
+    }
+
+    // Phase 1: Crawling - inchworm motion toward center
+    else if (mergePhase.value === 1) {
+      // Clear flight deformation
+      slime1FlightX.value *= 0.9;
+      slime1FlightY.value *= 0.9;
+      slime2FlightX.value *= 0.9;
+      slime2FlightY.value *= 0.9;
+
+      // Crawl speed (slow and gooey)
+      const crawlSpeed = 0.4; // pixels per frame
+      crawlProgress.value += dt * 2; // Cycle every ~0.5 seconds
+
+      // Inchworm motion: compress then extend
+      const crawlCycle = Math.sin(crawlProgress.value * Math.PI * 2);
+      const stretchPhase = Math.cos(crawlProgress.value * Math.PI * 2);
+
+      // Slime 1 crawls toward slime 2
+      slime1CrawlStretch.value = 1 + crawlCycle * 0.15;
+      // Move during extend phase (when stretchPhase > 0)
+      if (stretchPhase > 0) {
+        slime1X.value += nx * crawlSpeed * stretchPhase;
+        slime1Y.value += ny * crawlSpeed * stretchPhase;
+      }
+
+      // Slime 2 crawls toward slime 1 (opposite direction, offset phase)
+      slime2CrawlStretch.value = 1 + Math.sin((crawlProgress.value + 0.25) * Math.PI * 2) * 0.15;
+      const stretch2Phase = Math.cos((crawlProgress.value + 0.25) * Math.PI * 2);
+      if (stretch2Phase > 0) {
+        slime2X.value -= nx * crawlSpeed * stretch2Phase;
+        slime2Y.value -= ny * crawlSpeed * stretch2Phase;
+      }
+
+      // Check if close enough for approach phase
+      if (dist < 80) {
+        mergePhase.value = 2;
+      }
+    }
+
+    // Phase 2: Approaching - slow down and extend toward each other
+    else if (mergePhase.value === 2) {
+      // Continue slower crawl
+      crawlProgress.value += dt * 1.5;
+
+      // Slow approach
+      const approachSpeed = 0.2;
+      slime1X.value += nx * approachSpeed;
+      slime1Y.value += ny * approachSpeed;
+      slime2X.value -= nx * approachSpeed;
+      slime2Y.value -= ny * approachSpeed;
+
+      // Extend toward each other (stretch in direction of other slime)
+      const extendAmount = interpolate(dist, [70, 40], [0, 0.25], Extrapolation.CLAMP);
+      slime1CrawlStretch.value = 1 + extendAmount;
+      slime2CrawlStretch.value = 1 + extendAmount;
+
+      // Check if close enough for contact
+      if (dist < 45) {
+        mergePhase.value = 3;
+        bridgeProgress.value = 0;
+      }
+    }
+
+    // Phase 3: Contact - bridge forms and thickens
+    else if (mergePhase.value === 3) {
+      // Bridge grows
+      bridgeProgress.value += dt * 2;
+
+      // Pull together as bridge strengthens
+      const pullSpeed = interpolate(bridgeProgress.value, [0, 1], [0.3, 1.5]);
+      slime1X.value += nx * pullSpeed;
+      slime1Y.value += ny * pullSpeed;
+      slime2X.value -= nx * pullSpeed;
+      slime2Y.value -= ny * pullSpeed;
+
+      // Stretch toward each other
+      slime1CrawlStretch.value = 1 + 0.3 * (1 - bridgeProgress.value);
+      slime2CrawlStretch.value = 1 + 0.3 * (1 - bridgeProgress.value);
+
+      // Check if merged
+      if (dist < 15 || bridgeProgress.value > 1) {
+        mergePhase.value = 4;
+        mergeProgress.value = withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) }, () => {
+          // Reset everything
+          isSplit.value = false;
+          splitProgress.value = 0;
+          mergeProgress.value = 0;
+          mergePhase.value = 0;
+          bridgeProgress.value = 0;
+          slime1CrawlStretch.value = 1;
+          slime2CrawlStretch.value = 1;
+          const centerX = (slime1X.value + slime2X.value) / 2;
+          const centerY = (slime1Y.value + slime2Y.value) / 2;
+          bodyX.value = centerX;
+          bodyY.value = centerY;
+          grabX.value = centerX;
+          grabY.value = centerY;
+          // Wobble on reform
+          wobbleScale.value = withSequence(
+            withTiming(1.15, { duration: 100 }),
+            withSpring(1, WOBBLE_SPRING)
+          );
+        });
+      }
+    }
+  });
 
   // Animated styles for the slime body
   const slimeStyle = useAnimatedStyle(() => {
@@ -762,9 +1223,17 @@ export default function InteractiveSlime({
       Extrapolation.CLAMP
     );
 
+    // Easter egg: pinch stretch (two-finger pull apart)
+    const pinchStretchX = isPinching.value
+      ? interpolate(stretchDistance.value, [0, SPLIT_THRESHOLD], [1, 1.8], Extrapolation.CLAMP)
+      : 1;
+    const pinchStretchY = isPinching.value
+      ? interpolate(stretchDistance.value, [0, SPLIT_THRESHOLD], [1, 0.6], Extrapolation.CLAMP)
+      : 1;
+
     // Combine all scale effects
-    let scaleX = breathScale * idleSquishX * directionalStretchX * horizontalSquish * horizontalBulge * wobbleScale.value * flightScaleX * flightCompressX * impactCompressX * impactBulgeX * pressBulgeX * puffScale * explosionScaleX;
-    let scaleY = breathScale * idleSquishY * directionalStretchY * verticalSquish * verticalBulge * wobbleScale.value * flightScaleY * flightCompressY * impactCompressY * impactBulgeY * pressCompressY * puffScale * explosionScaleY;
+    let scaleX = breathScale * idleSquishX * directionalStretchX * horizontalSquish * horizontalBulge * wobbleScale.value * flightScaleX * flightCompressX * impactCompressX * impactBulgeX * pressBulgeX * puffScale * explosionScaleX * pinchStretchX;
+    let scaleY = breathScale * idleSquishY * directionalStretchY * verticalSquish * verticalBulge * wobbleScale.value * flightScaleY * flightCompressY * impactCompressY * impactBulgeY * pressCompressY * puffScale * explosionScaleY * pinchStretchY;
 
     // Organic morph
     const baseVariants = [
@@ -861,7 +1330,11 @@ export default function InteractiveSlime({
     const totalSkewX = skewX + wobbleSkewX.value + flightSkewX + impactSkewX;
     const totalSkewY = skewY + wobbleSkewY.value + flightSkewY + impactSkewY;
 
+    // Hide main slime when split
+    const opacity = isSplit.value ? 0 : 1;
+
     return {
+      opacity,
       transform: [
         // Position at BODY center (the lagging part)
         { translateX: bodyX.value + wobbleX.value },
@@ -894,7 +1367,11 @@ export default function InteractiveSlime({
     const faceOffsetX = (grabX.value - bodyX.value) * 0.08;
     const faceOffsetY = (grabY.value - bodyY.value) * 0.08;
 
+    // Hide during split
+    const opacity = isSplit.value ? 0 : 1;
+
     return {
+      opacity,
       transform: [
         { translateX: bodyX.value + wobbleX.value * 0.4 + faceOffsetX },
         { translateY: bodyY.value + wobbleY.value * 0.4 + faceOffsetY },
@@ -902,10 +1379,130 @@ export default function InteractiveSlime({
     };
   });
 
+  // Split slime 1 style (left) - with full deformation like main slime
+  const splitSlime1Style = useAnimatedStyle(() => {
+    if (!isSplit.value) {
+      return { opacity: 0 };
+    }
+
+    // 50% scale, grows slightly during merge
+    const baseScale = interpolate(mergeProgress.value, [0, 1], [MINI_SLIME_SCALE, MINI_SLIME_SCALE * 1.4]);
+    const opacity = interpolate(mergeProgress.value, [0.8, 1], [1, 0], Extrapolation.CLAMP);
+
+    // Impact squish - compress against wall, bulge perpendicular
+    const impactCompressX = 1 - Math.abs(slime1ImpactX.value) * 0.2;
+    const impactCompressY = 1 - Math.abs(slime1ImpactY.value) * 0.2;
+    const impactBulgeX = 1 + Math.abs(slime1ImpactY.value) * 0.12;
+    const impactBulgeY = 1 + Math.abs(slime1ImpactX.value) * 0.12;
+
+    // Flight deformation - stretch in movement direction
+    const flightScaleX = 1 + Math.abs(slime1FlightX.value) * 1.5;
+    const flightScaleY = 1 + Math.abs(slime1FlightY.value) * 1.5;
+    const flightCompressX = 1 - Math.abs(slime1FlightY.value) * 0.5;
+    const flightCompressY = 1 - Math.abs(slime1FlightX.value) * 0.5;
+
+    // Flight skew - tilt in direction of movement
+    const flightSkewX = slime1FlightY.value * 30;
+    const flightSkewY = -slime1FlightX.value * 30;
+
+    // Impact skew
+    const impactSkewX = slime1ImpactY.value * 10;
+    const impactSkewY = -slime1ImpactX.value * 10;
+
+    // Crawl stretch - direction toward slime2
+    const dx = slime2X.value - slime1X.value;
+    const dy = slime2Y.value - slime1Y.value;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dirX = dist > 0 ? dx / dist : 1;
+    const dirY = dist > 0 ? dy / dist : 0;
+
+    // Crawl stretch stretches toward the other slime (horizontal stretch when moving horizontally)
+    const crawlStretchX = 1 + (slime1CrawlStretch.value - 1) * Math.abs(dirX);
+    const crawlStretchY = 1 + (slime1CrawlStretch.value - 1) * Math.abs(dirY);
+    // Compress perpendicular to movement direction
+    const crawlCompressX = 1 - (slime1CrawlStretch.value - 1) * 0.5 * Math.abs(dirY);
+    const crawlCompressY = 1 - (slime1CrawlStretch.value - 1) * 0.5 * Math.abs(dirX);
+
+    const scaleX = baseScale * slime1Wobble.value * impactCompressX * impactBulgeX * flightScaleX * flightCompressX * crawlStretchX * crawlCompressX;
+    const scaleY = baseScale * slime1Wobble.value * impactCompressY * impactBulgeY * flightScaleY * flightCompressY * crawlStretchY * crawlCompressY;
+
+    return {
+      opacity,
+      transform: [
+        { translateX: slime1X.value },
+        { translateY: slime1Y.value },
+        { skewX: `${flightSkewX + impactSkewX}deg` },
+        { skewY: `${flightSkewY + impactSkewY}deg` },
+        { scaleX },
+        { scaleY },
+      ],
+    };
+  });
+
+  // Split slime 2 style (right) - with full deformation like main slime
+  const splitSlime2Style = useAnimatedStyle(() => {
+    if (!isSplit.value) {
+      return { opacity: 0 };
+    }
+
+    // 50% scale, grows slightly during merge
+    const baseScale = interpolate(mergeProgress.value, [0, 1], [MINI_SLIME_SCALE, MINI_SLIME_SCALE * 1.4]);
+    const opacity = interpolate(mergeProgress.value, [0.8, 1], [1, 0], Extrapolation.CLAMP);
+
+    // Impact squish - compress against wall, bulge perpendicular
+    const impactCompressX = 1 - Math.abs(slime2ImpactX.value) * 0.2;
+    const impactCompressY = 1 - Math.abs(slime2ImpactY.value) * 0.2;
+    const impactBulgeX = 1 + Math.abs(slime2ImpactY.value) * 0.12;
+    const impactBulgeY = 1 + Math.abs(slime2ImpactX.value) * 0.12;
+
+    // Flight deformation - stretch in movement direction
+    const flightScaleX = 1 + Math.abs(slime2FlightX.value) * 1.5;
+    const flightScaleY = 1 + Math.abs(slime2FlightY.value) * 1.5;
+    const flightCompressX = 1 - Math.abs(slime2FlightY.value) * 0.5;
+    const flightCompressY = 1 - Math.abs(slime2FlightX.value) * 0.5;
+
+    // Flight skew - tilt in direction of movement
+    const flightSkewX = slime2FlightY.value * 30;
+    const flightSkewY = -slime2FlightX.value * 30;
+
+    // Impact skew
+    const impactSkewX = slime2ImpactY.value * 10;
+    const impactSkewY = -slime2ImpactX.value * 10;
+
+    // Crawl stretch - direction toward slime1
+    const dx = slime1X.value - slime2X.value;
+    const dy = slime1Y.value - slime2Y.value;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dirX = dist > 0 ? dx / dist : -1;
+    const dirY = dist > 0 ? dy / dist : 0;
+
+    // Crawl stretch stretches toward the other slime
+    const crawlStretchX = 1 + (slime2CrawlStretch.value - 1) * Math.abs(dirX);
+    const crawlStretchY = 1 + (slime2CrawlStretch.value - 1) * Math.abs(dirY);
+    // Compress perpendicular to movement direction
+    const crawlCompressX = 1 - (slime2CrawlStretch.value - 1) * 0.5 * Math.abs(dirY);
+    const crawlCompressY = 1 - (slime2CrawlStretch.value - 1) * 0.5 * Math.abs(dirX);
+
+    const scaleX = baseScale * slime2Wobble.value * impactCompressX * impactBulgeX * flightScaleX * flightCompressX * crawlStretchX * crawlCompressX;
+    const scaleY = baseScale * slime2Wobble.value * impactCompressY * impactBulgeY * flightScaleY * flightCompressY * crawlStretchY * crawlCompressY;
+
+    return {
+      opacity,
+      transform: [
+        { translateX: slime2X.value },
+        { translateY: slime2Y.value },
+        { skewX: `${flightSkewX + impactSkewX}deg` },
+        { skewY: `${flightSkewY + impactSkewY}deg` },
+        { scaleX },
+        { scaleY },
+      ],
+    };
+  });
+
   return (
-    <GestureDetector gesture={panGesture}>
+    <GestureDetector gesture={composedGesture}>
       <View style={styles.container}>
-        {/* Slime blob body */}
+        {/* Main slime blob body - hidden when split */}
         <Animated.View
           style={[
             styles.blob,
@@ -914,7 +1511,7 @@ export default function InteractiveSlime({
           ]}
         />
 
-        {/* Face layer */}
+        {/* Face layer - hidden when split */}
         <Animated.View style={[styles.faceContainer, faceStyle]}>
           {/* Eyes */}
           <View style={styles.eyesContainer}>
@@ -925,6 +1522,30 @@ export default function InteractiveSlime({
           {/* Mouth */}
           <View style={styles.mouthContainer}>
             <View style={styles.mouth} />
+          </View>
+        </Animated.View>
+
+        {/* Split slime 1 (left) */}
+        <Animated.View style={[styles.splitSlime, splitSlime1Style]}>
+          <View style={[styles.splitSlimeBlob, { backgroundColor: colors.slime.mint }]} />
+          <View style={styles.splitSlimeFace}>
+            <View style={styles.splitEyesContainer}>
+              <View style={styles.splitEye} />
+              <View style={styles.splitEye} />
+            </View>
+            <View style={styles.splitMouth} />
+          </View>
+        </Animated.View>
+
+        {/* Split slime 2 (right) */}
+        <Animated.View style={[styles.splitSlime, splitSlime2Style]}>
+          <View style={[styles.splitSlimeBlob, { backgroundColor: colors.slime.mint }]} />
+          <View style={styles.splitSlimeFace}>
+            <View style={styles.splitEyesContainer}>
+              <View style={styles.splitEye} />
+              <View style={styles.splitEye} />
+            </View>
+            <View style={styles.splitMouth} />
           </View>
         </Animated.View>
       </View>
@@ -977,5 +1598,48 @@ const styles = StyleSheet.create({
     borderRightColor: 'transparent',
     borderBottomLeftRadius: 14,
     borderBottomRightRadius: 14,
+  },
+  // Split slime styles (smaller versions)
+  splitSlime: {
+    position: 'absolute',
+    width: SLIME_WIDTH,
+    height: SLIME_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  splitSlimeBlob: {
+    position: 'absolute',
+    width: SLIME_WIDTH,
+    height: SLIME_HEIGHT,
+    borderRadius: 50,
+  },
+  splitSlimeFace: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  splitEyesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 2,
+  },
+  splitEye: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#1a1a1a',
+  },
+  splitMouth: {
+    width: 8,
+    height: 3,
+    backgroundColor: 'transparent',
+    borderColor: 'rgba(26, 26, 26, 0.5)',
+    borderWidth: 1.5,
+    borderTopWidth: 0,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    marginTop: 1,
   },
 });
