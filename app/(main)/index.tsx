@@ -118,33 +118,51 @@ const getMessagePreview = (content: string): string => {
     const parsed = JSON.parse(content);
     if (parsed && parsed.type) {
       switch (parsed.type) {
+        // Pre-confirmation cards (pending)
+        case 'pending_meal':
+          return parsed.confirmed ? '✓ Meal logged' : '🍽️ Meal ready to log';
+        case 'pending_water':
+          return parsed.confirmed ? '✓ Water logged' : '💧 Water ready to log';
+        case 'pending_workout':
+          return parsed.confirmed ? '✓ Workout logged' : '🏋️ Workout ready to log';
+        case 'pending_expense':
+          return parsed.confirmed ? '✓ Expense logged' : '💸 Expense ready to log';
+        case 'pending_income':
+          return parsed.confirmed ? '✓ Income logged' : '💰 Income ready to log';
+
+        // Photo analysis cards
         case 'meal_analysis':
-          return '📸 Meal logged';
+          // Check if it has a receiptUrl to determine if it's a receipt
+          return parsed.receiptUrl ? '🧾 Receipt logged' : '📸 Meal logged';
+
+        // Confirmation cards (already logged)
+        case 'log_confirmation':
+          if (parsed.receiptUrl) return '✓ Receipt logged';
+          if (parsed.logType === 'income') return '✓ Income logged';
+          if (parsed.logType === 'bill') return '✓ Bill logged';
+          return '✓ Expense logged';
+        case 'bill_confirmation':
+          return parsed.isSubscription ? '✓ Subscription added' : '✓ Bill added';
+
+        // Display cards
         case 'bills_card':
           return '📅 Bills overview';
         case 'summary_card':
-          // Check if it's weekly or monthly
           return parsed.period === 'month' ? '📊 Monthly summary' : '📊 Weekly summary';
         case 'goals_card':
           return '🎯 Savings goals';
         case 'budget_card':
           return '📊 Budget overview';
-        case 'log_confirmation':
-          if (parsed.logType === 'income') return '💰 Income logged';
-          if (parsed.logType === 'bill') return '📅 Bill logged';
-          return '💸 Expense logged';
-        case 'bill_confirmation':
-          return parsed.isSubscription ? '📱 Subscription added' : '📅 Bill added';
-        case 'receipt_analysis':
-          return '🧾 Receipt logged';
+
         default:
-          return content;
+          // Return truncated content for unknown types
+          return content.length > 50 ? content.substring(0, 50) + '...' : content;
       }
     }
   } catch {
-    // Not JSON, return original content
+    // Not JSON, return original content (truncated if too long)
   }
-  return content;
+  return content.length > 50 ? content.substring(0, 50) + '...' : content;
 };
 
 // Squad agent card

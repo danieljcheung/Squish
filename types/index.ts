@@ -279,3 +279,44 @@ export interface WeeklySummary {
   created_at: string;
   updated_at: string;
 }
+
+// ============================================
+// CROSS-AGENT SHARED INSIGHTS
+// ============================================
+
+export type InsightType =
+  // Fitness insights
+  | 'workout_logged'
+  | 'streak_achieved'
+  | 'meal_logged'
+  | 'goal_hit'
+  | 'activity_drop'
+  // Finance insights
+  | 'expense_logged'
+  | 'savings_progress'
+  | 'goal_completed'
+  | 'budget_warning'
+  | 'budget_streak'
+  | 'subscription_detected';
+
+export interface SharedInsight {
+  id: string;
+  user_id: string;
+  source_agent_id: string;
+  source_agent_type: string;
+  source_agent_name: string;
+  insight_type: InsightType;
+  insight_data: Record<string, unknown>;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface SharedInsightInsert {
+  user_id: string;
+  source_agent_id: string;
+  source_agent_type: string;
+  source_agent_name: string;
+  insight_type: InsightType;
+  insight_data: Record<string, unknown>;
+  expires_at: string;
+}

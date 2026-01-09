@@ -18,76 +18,58 @@ interface ClaudeResponse {
 const SYSTEM_PROMPTS = {
   fitness: `You are {{name}}, a fitness coach slime in the Squish app.
 
+LOGGING FORMAT - FOLLOW EXACTLY:
+When user mentions EATING FOOD → Output ONLY this (no other text):
+[CONFIRM_MEAL: description=FOOD_NAME, type=MEAL_TYPE, calories=NUM, protein=NUM, carbs=NUM, fat=NUM]
+
+When user mentions WORKOUT → Output ONLY this (no other text):
+[CONFIRM_WORKOUT: type=TYPE, duration=MINS]
+
+When user mentions DRINKING WATER → Output ONLY this (no other text):
+[CONFIRM_WATER: amount=ML]
+
+CRITICAL: For logging, output ONLY the tag. No comments, no JSON, no "sounds tasty", no "I've logged it". JUST THE TAG.
+
 Style: {{style_description}}
-
 User: Goal={{goal}}, Target={{target}}, Frequency={{frequency}}, Location={{location}}, Diet={{diet}}
-
 Memories: {{memories}}
 
-CRITICAL RULES - FOLLOW EXACTLY:
-- MAX 1-3 sentences. No exceptions.
-- Use line breaks between thoughts. Never write paragraphs.
-- 1-2 emojis max per message.
-- Lists: 3 items max.
-- NEVER repeat what user said.
-- NEVER over-explain or add fluff.
-- Be punchy and direct.
+GENERAL CHAT RULES (for non-logging conversations):
+- MAX 1-2 sentences
+- 1 emoji max
+- Be punchy and direct
 
-WORKOUT LOGGING (IMPORTANT - FOLLOW THIS EXACTLY):
-When user mentions completing a workout, you MUST either log it or ask questions.
+WORKOUT LOGGING:
+If you know BOTH type AND duration → Output ONLY the tag:
+- Type: run/cycling/swim = cardio, weights/lifting/chest/back/legs = strength, yoga/stretching = flexibility, hiit/circuit = hiit, walk = walk
+- Duration: "30 mins" = 30, "an hour" = 60, "5k run" = 30
 
-STEP 1: Check if you know BOTH type AND duration:
-- Type keywords: run/jog/cycling/swim = cardio, weights/lifting/chest/back/legs/squat = strength, yoga/stretching/pilates = flexibility, hiit/circuit/intervals = hiit, walk/walking/hike = walk
-- Duration: "30 mins" = 30, "an hour" = 60, "5k run" = 30, "10k" = 60
+If type OR duration is MISSING → Ask briefly: "What type?" or "How long?"
 
-STEP 2A: If you know BOTH type and duration → LOG IT:
-- Respond with celebration + [WORKOUT: type=TYPE, duration=MINS]
-- Example: "Logged! 💪 45 min strength. Crushing it! [WORKOUT: type=strength, duration=45]"
+WORKOUT EXAMPLES (output ONLY the tag when you have both):
+User: "Did 45 mins of chest and back" → You: [CONFIRM_WORKOUT: type=strength, duration=45]
+User: "Went for a 5k run" → You: [CONFIRM_WORKOUT: type=cardio, duration=30]
+User: "Lifted weights for an hour" → You: [CONFIRM_WORKOUT: type=strength, duration=60]
+User: "Just finished a workout" → You: "What type?"
+User: "Did some cardio" → You: "How long?"
 
-STEP 2B: If type OR duration is MISSING → ASK:
-- Missing type? Ask: "Nice work! 💪 What type of workout? (cardio, strength, flexibility, HIIT, or walk)"
-- Missing duration? Ask: "How long was it roughly?"
-- NEVER give generic acknowledgement. ALWAYS ask the missing info.
+MEAL LOGGING EXAMPLES (output ONLY the tag):
+User: "I ate a salami sandwich" → You: [CONFIRM_MEAL: description=Salami Sandwich, type=lunch, calories=450, protein=18, carbs=35, fat=25]
+User: "Had chicken pasta" → You: [CONFIRM_MEAL: description=Chicken Pasta, type=lunch, calories=650, protein=45, carbs=60, fat=20]
+User: "Just had an apple" → You: [CONFIRM_MEAL: description=Apple, type=snack, calories=95, protein=0, carbs=25, fat=0]
+User: "Had a protein shake" → You: [CONFIRM_MEAL: description=Protein Shake, type=snack, calories=200, protein=25, carbs=10, fat=5]
 
-EXAMPLES:
-User: "Did 45 mins of chest and back"
-You: "Logged! 💪 45 min strength. Crushing it! [WORKOUT: type=strength, duration=45]"
+WATER LOGGING (output ONLY the tag):
+- "Drank water" / "Had water" → 250ml
+- "Drank a bottle" → 500ml
+- "Had 2 glasses" → 500ml
 
-User: "Went for a 5k run"
-You: "Nice! 🏃 30 min cardio logged. [WORKOUT: type=cardio, duration=30]"
+WATER EXAMPLES:
+User: "Just drank some water" → You: [CONFIRM_WATER: amount=250]
+User: "Had a bottle of water" → You: [CONFIRM_WATER: amount=500]
+User: "Drank 2 glasses" → You: [CONFIRM_WATER: amount=500]
 
-User: "Just finished a workout" or "Did my workout" or "I want to log a workout"
-You: "Nice! 💪 What type of workout?"
-
-User: "Strength" (after you asked type)
-You: "How long was it roughly?"
-
-User: "45 minutes" (after you asked duration)
-You: "Logged! 💪 45 min strength workout! [WORKOUT: type=strength, duration=45]"
-
-User: "Did some cardio"
-You: "Nice! 🏃 How long?"
-
-User: "Lifted weights for an hour"
-You: "Beast mode! 💪 60 min strength logged. [WORKOUT: type=strength, duration=60]"
-
-BAD (too long):
-"That's great that you had a chicken salad! Chicken is an excellent source of lean protein which helps build muscle. I've logged this for you. You're making great progress! Keep it up! 💪🎉"
-
-GOOD:
-"Logged! 🥗
-
-1,240 / 2,000 cal today. Solid protein 💪"
-
-BAD:
-"Good morning! I hope you're feeling energized and ready to take on the day! Remember, every workout counts and I believe in you!"
-
-GOOD:
-"Morning! 🌅
-
-Ready to move today?"
-
-If you learn something new about the user, add at the end: [MEMORY: key=value]`,
+If you learn something new about the user, add: [MEMORY: key=value]`,
 
   budget: `You are {{name}}, a friendly finance buddy slime in the Squish app.
 
@@ -111,33 +93,55 @@ CRITICAL RULES - FOLLOW EXACTLY:
 - Be punchy and direct.
 - Use {{currency_symbol}} for all money amounts.
 
-EXPENSE LOGGING:
-When user mentions spending money:
+EXPENSE LOGGING (CONFIRMATION-BASED):
+When user mentions spending money, SHOW CONFIRMATION CARD - never auto-log.
 
 STEP 1: Check if you know BOTH amount AND category:
 - Category keywords: food/coffee/restaurant/lunch/dinner = food, uber/gas/transit/bus = transport, netflix/spotify/subscription = subscriptions, rent/utilities/bills = bills, shopping/clothes/amazon = shopping, entertainment/movies/games = entertainment, groceries/supermarket/costco/walmart = groceries
 
-STEP 2A: If BOTH amount and category → LOG:
-- Format: [EXPENSE: amount=AMT, category=CAT, description=DESC]
-- Example: "Logged! 🛒 {{currency_symbol}}45 groceries [EXPENSE: amount=45, category=groceries, description=groceries at costco]"
+STEP 2A: If BOTH amount and category → SHOW CONFIRMATION:
+- Format: [CONFIRM_EXPENSE: amount=AMT, category=CAT, description=DESC]
+- Keep message SHORT - the card shows the details
+- Example: "Got it! 🛒 [CONFIRM_EXPENSE: amount=45, category=groceries, description=groceries at costco]"
 
 STEP 2B: If MISSING info → ASK:
 - Missing amount? "How much was it?"
 - Missing category? "What was this for?"
 
-INCOME LOGGING:
-When user mentions receiving money/income:
+EXPENSE EXAMPLES:
+User: "Spent $45 on groceries"
+You: "Got it! 🛒 [CONFIRM_EXPENSE: amount=45, category=groceries, description=groceries]"
+
+User: "Bought coffee for $6"
+You: "☕ [CONFIRM_EXPENSE: amount=6, category=food, description=coffee]"
+
+User: "Spent some money"
+You: "How much?"
+
+INCOME LOGGING (CONFIRMATION-BASED):
+When user mentions receiving money/income, SHOW CONFIRMATION CARD - never auto-log.
 
 STEP 1: Check if you know BOTH amount AND source:
 - Source keywords: paycheck/salary/work = salary, freelance/gig/side = freelance, gift/birthday = gift, refund/return = refund
 
-STEP 2A: If BOTH amount and source → LOG:
-- Format: [INCOME: amount=AMT, category=CAT, description=DESC]
-- Example: "Nice! 💰 {{currency_symbol}}500 freelance income added [INCOME: amount=500, category=freelance, description=web project]"
+STEP 2A: If BOTH amount and source → SHOW CONFIRMATION:
+- Format: [CONFIRM_INCOME: amount=AMT, category=CAT, description=DESC]
+- Keep message SHORT - the card shows the details
+- Example: "Nice! 💰 [CONFIRM_INCOME: amount=500, category=freelance, description=web project]"
 
 STEP 2B: If MISSING info → ASK:
 - Missing amount? "How much?"
 - Missing source? "Where's it from?"
+
+INCOME EXAMPLES:
+User: "Got paid $2000 today"
+You: "Nice! 💰 [CONFIRM_INCOME: amount=2000, category=salary, description=paycheck]"
+
+User: "Got $100 tip"
+You: "Sweet! 💵 [CONFIRM_INCOME: amount=100, category=other, description=tip]"
+
+User: "Got paid"
+You: "Nice! How much?"
 
 BUDGET QUERIES:
 When user asks about budget/spending:
@@ -296,8 +300,15 @@ const STYLE_DESCRIPTIONS = {
 
 /**
  * Build the system prompt from agent persona and memories
+ * @param agent - The agent to build the prompt for
+ * @param memories - Agent's stored memories
+ * @param otherAgentInsights - Optional formatted string of insights from other agents
  */
-export function buildSystemPrompt(agent: Agent, memories: AgentMemory[]): string {
+export function buildSystemPrompt(
+  agent: Agent,
+  memories: AgentMemory[],
+  otherAgentInsights?: string
+): string {
   // Map agent types to prompt templates
   const typeToTemplate: Record<string, keyof typeof SYSTEM_PROMPTS> = {
     fitness_coach: 'fitness',
@@ -369,6 +380,11 @@ export function buildSystemPrompt(agent: Agent, memories: AgentMemory[]): string
     ? memories.map(m => `- ${m.key}: ${m.value}`).join('\n')
     : '- No memories yet';
   template = template.replace(/\{\{memories\}\}/g, memoryText);
+
+  // Add cross-agent insights if provided
+  if (otherAgentInsights && otherAgentInsights.trim()) {
+    template += `\n\n${otherAgentInsights}`;
+  }
 
   return template;
 }
@@ -497,11 +513,11 @@ export function extractMemories(response: string): { key: string; value: string 
 }
 
 /**
- * Extract workout data from Claude's response
+ * Extract workout confirmation data from Claude's response
  */
-export function extractWorkout(response: string): { type: string; duration: number } | null {
-  // Match pattern like [WORKOUT: type=strength, duration=45]
-  const pattern = /\[WORKOUT:\s*type=(\w+),\s*duration=(\d+)\]/i;
+export function extractWorkoutConfirm(response: string): { type: string; duration: number } | null {
+  // Match pattern like [CONFIRM_WORKOUT: type=strength, duration=45]
+  const pattern = /\[CONFIRM_WORKOUT:\s*type=(\w+),\s*duration=(\d+)\]/i;
   const match = response.match(pattern);
 
   if (match) {
@@ -515,11 +531,116 @@ export function extractWorkout(response: string): { type: string; duration: numb
 }
 
 /**
- * Extract expense data from Claude's response
+ * Extract meal confirmation data from Claude's response
  */
-export function extractExpense(response: string): { amount: number; category: string; description: string } | null {
-  // Match pattern like [EXPENSE: amount=15, category=food, description=coffee]
-  const pattern = /\[EXPENSE:\s*amount=([0-9.]+),\s*category=(\w+),\s*description=([^\]]+)\]/i;
+export function extractMealConfirm(response: string): {
+  description: string;
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+} | null {
+  // First try exact pattern: [CONFIRM_MEAL: description=X, type=X, calories=X, protein=X, carbs=X, fat=X]
+  const exactPattern = /\[CONFIRM_MEAL:\s*description=([^,]+),\s*type=(\w+),\s*calories=(\d+),\s*protein=(\d+),\s*carbs=(\d+),\s*fat=(\d+)\]/i;
+  const exactMatch = response.match(exactPattern);
+
+  if (exactMatch) {
+    const mealType = exactMatch[2].toLowerCase() as 'breakfast' | 'lunch' | 'dinner' | 'snack';
+    return {
+      description: exactMatch[1].trim(),
+      mealType: ['breakfast', 'lunch', 'dinner', 'snack'].includes(mealType) ? mealType : 'snack',
+      calories: parseInt(exactMatch[3], 10),
+      proteinG: parseInt(exactMatch[4], 10),
+      carbsG: parseInt(exactMatch[5], 10),
+      fatG: parseInt(exactMatch[6], 10),
+    };
+  }
+
+  // Try flexible pattern - extract the whole tag content and parse parameters individually
+  const tagPattern = /\[CONFIRM_MEAL:\s*([^\]]+)\]/i;
+  const tagMatch = response.match(tagPattern);
+
+  if (tagMatch) {
+    const content = tagMatch[1];
+
+    // Extract each parameter flexibly (order-independent)
+    const descMatch = content.match(/description\s*=\s*([^,\]]+?)(?=,\s*(?:type|calories|protein|carbs|fat)=|$)/i);
+    const typeMatch = content.match(/type\s*=\s*(\w+)/i);
+    const calMatch = content.match(/calories\s*=\s*(\d+)/i);
+    const proteinMatch = content.match(/protein\s*=\s*(\d+)/i);
+    const carbsMatch = content.match(/carbs\s*=\s*(\d+)/i);
+    const fatMatch = content.match(/fat\s*=\s*(\d+)/i);
+
+    // Need at least description, calories, and type
+    if (descMatch && calMatch) {
+      const mealType = (typeMatch?.[1]?.toLowerCase() || 'snack') as 'breakfast' | 'lunch' | 'dinner' | 'snack';
+      return {
+        description: descMatch[1].trim(),
+        mealType: ['breakfast', 'lunch', 'dinner', 'snack'].includes(mealType) ? mealType : 'snack',
+        calories: parseInt(calMatch[1], 10),
+        proteinG: proteinMatch ? parseInt(proteinMatch[1], 10) : 0,
+        carbsG: carbsMatch ? parseInt(carbsMatch[1], 10) : 0,
+        fatG: fatMatch ? parseInt(fatMatch[1], 10) : 0,
+      };
+    }
+  }
+
+  // Log for debugging if we see CONFIRM_MEAL but couldn't parse it
+  if (response.includes('CONFIRM_MEAL')) {
+    console.warn('[extractMealConfirm] Found CONFIRM_MEAL but could not parse:', response.substring(response.indexOf('CONFIRM_MEAL') - 10, response.indexOf('CONFIRM_MEAL') + 150));
+  }
+
+  // Fallback: Try to parse JSON format (in case Claude outputs meal_analysis JSON)
+  if (response.includes('"type":"meal_analysis"') || response.includes('"type": "meal_analysis"')) {
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*?"type"\s*:\s*"meal_analysis"[\s\S]*?\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.analysis) {
+          const analysis = parsed.analysis;
+          const mealType = (analysis.mealType?.toLowerCase() || 'snack') as 'breakfast' | 'lunch' | 'dinner' | 'snack';
+          return {
+            description: analysis.description || 'Meal',
+            mealType: ['breakfast', 'lunch', 'dinner', 'snack'].includes(mealType) ? mealType : 'snack',
+            calories: analysis.calories || 0,
+            proteinG: analysis.proteinG || 0,
+            carbsG: analysis.carbsG || 0,
+            fatG: analysis.fatG || 0,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('[extractMealConfirm] Failed to parse JSON fallback:', e);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract water confirmation data from Claude's response
+ */
+export function extractWaterConfirm(response: string): { amountMl: number } | null {
+  // Match pattern like [CONFIRM_WATER: amount=250]
+  const pattern = /\[CONFIRM_WATER:\s*amount=(\d+)\]/i;
+  const match = response.match(pattern);
+
+  if (match) {
+    return {
+      amountMl: parseInt(match[1], 10),
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Extract expense confirmation data from Claude's response
+ */
+export function extractExpenseConfirm(response: string): { amount: number; category: string; description: string } | null {
+  // Match pattern like [CONFIRM_EXPENSE: amount=15, category=food, description=coffee]
+  const pattern = /\[CONFIRM_EXPENSE:\s*amount=([0-9.]+),\s*category=(\w+),\s*description=([^\]]+)\]/i;
   const match = response.match(pattern);
 
   if (match) {
@@ -534,11 +655,11 @@ export function extractExpense(response: string): { amount: number; category: st
 }
 
 /**
- * Extract income data from Claude's response
+ * Extract income confirmation data from Claude's response
  */
-export function extractIncome(response: string): { amount: number; category: string; description: string } | null {
-  // Match pattern like [INCOME: amount=500, category=salary, description=paycheck]
-  const pattern = /\[INCOME:\s*amount=([0-9.]+),\s*category=(\w+),\s*description=([^\]]+)\]/i;
+export function extractIncomeConfirm(response: string): { amount: number; category: string; description: string } | null {
+  // Match pattern like [CONFIRM_INCOME: amount=500, category=salary, description=paycheck]
+  const pattern = /\[CONFIRM_INCOME:\s*amount=([0-9.]+),\s*category=(\w+),\s*description=([^\]]+)\]/i;
   const match = response.match(pattern);
 
   if (match) {
@@ -651,14 +772,32 @@ export function shouldShowBudget(response: string): boolean {
 }
 
 /**
- * Remove memory, workout, expense, income, and show tags from response text for display
+ * Remove memory, confirmation, and show tags from response text for display
  */
 export function cleanResponse(response: string): string {
+  if (!response) return '';
+
+  // If the response looks like JSON (starts with {), try to extract the message field
+  if (response.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(response);
+      if (parsed.message && typeof parsed.message === 'string') {
+        response = parsed.message;
+      }
+    } catch {
+      // Not valid JSON, continue with normal cleaning
+    }
+  }
+
   return response
     .replace(/\[MEMORY:\s*\w+=[^\]]+\]/g, '')
-    .replace(/\[WORKOUT:\s*type=\w+,\s*duration=\d+\]/gi, '')
-    .replace(/\[EXPENSE:\s*amount=[0-9.]+,\s*category=\w+,\s*description=[^\]]+\]/gi, '')
-    .replace(/\[INCOME:\s*amount=[0-9.]+,\s*category=\w+,\s*description=[^\]]+\]/gi, '')
+    // Confirmation tags (new confirmation-based flow) - use flexible patterns to catch variations
+    .replace(/\[CONFIRM_WORKOUT:[^\]]*\]/gi, '')
+    .replace(/\[CONFIRM_MEAL:[^\]]*\]/gi, '')
+    .replace(/\[CONFIRM_WATER:[^\]]*\]/gi, '')
+    .replace(/\[CONFIRM_EXPENSE:[^\]]*\]/gi, '')
+    .replace(/\[CONFIRM_INCOME:[^\]]*\]/gi, '')
+    // Show card tags
     .replace(/\[SHOW_BILLS\]/gi, '')
     .replace(/\[SHOW_SUMMARY\]/gi, '')
     .replace(/\[SHOW_GOALS\]/gi, '')
@@ -668,18 +807,28 @@ export function cleanResponse(response: string): string {
 
 /**
  * Send a message to Claude API and get a response
+ * @param agent - The agent handling the conversation
+ * @param messages - Previous messages in the conversation
+ * @param memories - Agent's stored memories
+ * @param userMessage - The user's current message
+ * @param otherAgentInsights - Optional formatted string of insights from other agents
  */
 export async function sendMessage(
   agent: Agent,
   messages: Message[],
   memories: AgentMemory[],
-  userMessage: string
+  userMessage: string,
+  otherAgentInsights?: string
 ): Promise<{
   response: string;
   newMemories: { key: string; value: string }[];
-  workout: { type: string; duration: number } | null;
-  expense: { amount: number; category: string; description: string } | null;
-  income: { amount: number; category: string; description: string } | null;
+  // Confirmation data (pending, not yet logged)
+  workoutConfirm: { type: string; duration: number } | null;
+  mealConfirm: { description: string; mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack'; calories: number; proteinG: number; carbsG: number; fatG: number } | null;
+  waterConfirm: { amountMl: number } | null;
+  expenseConfirm: { amount: number; category: string; description: string } | null;
+  incomeConfirm: { amount: number; category: string; description: string } | null;
+  // Show card flags
   showBills: boolean;
   showSummary: boolean;
   showGoals: boolean;
@@ -691,9 +840,11 @@ export async function sendMessage(
     return {
       response: "I'm having trouble connecting right now. Please try again later!",
       newMemories: [],
-      workout: null,
-      expense: null,
-      income: null,
+      workoutConfirm: null,
+      mealConfirm: null,
+      waterConfirm: null,
+      expenseConfirm: null,
+      incomeConfirm: null,
       showBills: false,
       showSummary: false,
       showGoals: false,
@@ -703,8 +854,8 @@ export async function sendMessage(
   }
 
   try {
-    // Build the system prompt
-    const systemPrompt = buildSystemPrompt(agent, memories);
+    // Build the system prompt with optional cross-agent insights
+    const systemPrompt = buildSystemPrompt(agent, memories, otherAgentInsights);
 
     // Format previous messages for context
     const conversationHistory = formatMessagesForClaude(messages);
@@ -743,17 +894,23 @@ export async function sendMessage(
     const textContent = data.content.find(c => c.type === 'text');
     const rawResponse = textContent?.text || "I'm not sure how to respond to that.";
 
+    // Debug: Log raw response to see what Claude is returning
+    console.log('[Claude Raw Response]:', rawResponse);
+
     // Extract any memories from the response
     const newMemories = extractMemories(rawResponse);
 
-    // Extract workout data if present
-    const workout = extractWorkout(rawResponse);
+    // Extract confirmation data (pending, not yet logged)
+    const workoutConfirm = extractWorkoutConfirm(rawResponse);
+    const mealConfirm = extractMealConfirm(rawResponse);
 
-    // Extract expense data if present
-    const expense = extractExpense(rawResponse);
-
-    // Extract income data if present
-    const income = extractIncome(rawResponse);
+    // Debug: Log extraction results
+    if (userMessage.toLowerCase().includes('ate') || userMessage.toLowerCase().includes('had') || userMessage.toLowerCase().includes('eat')) {
+      console.log('[Meal Detection] User mentioned food. mealConfirm:', mealConfirm);
+    }
+    const waterConfirm = extractWaterConfirm(rawResponse);
+    const expenseConfirm = extractExpenseConfirm(rawResponse);
+    const incomeConfirm = extractIncomeConfirm(rawResponse);
 
     // Check if should show cards - first check Claude's tags, then fall back to user message detection
     const showBills = shouldShowBills(rawResponse) || userWantsBills(userMessage);
@@ -770,9 +927,11 @@ export async function sendMessage(
     return {
       response: cleanedResponse,
       newMemories,
-      workout,
-      expense,
-      income,
+      workoutConfirm,
+      mealConfirm,
+      waterConfirm,
+      expenseConfirm,
+      incomeConfirm,
       showBills,
       showSummary,
       showGoals,
@@ -784,9 +943,11 @@ export async function sendMessage(
     return {
       response: "Oops! I'm having a moment. Let's try that again! 💪",
       newMemories: [],
-      workout: null,
-      expense: null,
-      income: null,
+      workoutConfirm: null,
+      mealConfirm: null,
+      waterConfirm: null,
+      expenseConfirm: null,
+      incomeConfirm: null,
       showBills: false,
       showSummary: false,
       showGoals: false,

@@ -225,6 +225,24 @@ export const createMessage = async (message: MessageInsert) => {
   return { data, error };
 };
 
+export const updateMessageContent = async (messageId: string, content: string) => {
+  console.log('[updateMessageContent] Attempting to update message:', messageId);
+  const { data, error, count } = await supabase
+    .from('messages')
+    .update({ content })
+    .eq('id', messageId)
+    .select();
+
+  console.log('[updateMessageContent] Result - data:', data, 'count:', count, 'error:', error);
+
+  if (error) {
+    return { data: null, error };
+  }
+
+  // Return the first item if available
+  return { data: data?.[0] || null, error: null };
+};
+
 // Agent Memory
 export const getMemories = async (agentId: string) => {
   const { data, error } = await supabase
@@ -1605,9 +1623,86 @@ export const deleteUserAccountData = async () => {
       if (agentError) console.error('Error deleting agents:', agentError);
     }
 
+    // 11. Delete shared insights
+    const { error: insightError } = await supabase
+      .from('agent_shared_insights')
+      .delete()
+      .eq('user_id', user.id);
+    if (insightError) console.error('Error deleting shared insights:', insightError);
+
     return { error: null };
   } catch (error) {
     console.error('deleteUserAccountData error:', error);
     return { error: error as Error };
   }
+};
+
+// ============================================
+// CROSS-AGENT SHARED INSIGHTS
+// ============================================
+
+export interface SharedInsightInsert {
+  user_id: string;
+  source_agent_id: string;
+  source_agent_type: string;
+  source_agent_name: string;
+  insight_type: string;
+  insight_data: Record<string, unknown>;
+  expires_at: string;
+}
+
+// Post a new insight from an agent
+export const postSharedInsight = async (insight: SharedInsightInsert) => {
+  const { data, error } = await supabase
+    .from('agent_shared_insights')
+    .insert(insight)
+    .select()
+    .single();
+  return { data, error };
+};
+
+// Get insights from other agents (excluding the current agent)
+export const getInsightsForAgent = async (userId: string, excludeAgentId: string) => {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('agent_shared_insights')
+    .select('*')
+    .eq('user_id', userId)
+    .neq('source_agent_id', excludeAgentId)
+    .gt('expires_at', now)
+    .order('created_at', { ascending: false })
+    .limit(10);
+  return { data, error };
+};
+
+// Get all recent insights for a user (for debugging/admin)
+export const getAllUserInsights = async (userId: string) => {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('agent_shared_insights')
+    .select('*')
+    .eq('user_id', userId)
+    .gt('expires_at', now)
+    .order('created_at', { ascending: false });
+  return { data, error };
+};
+
+// Delete expired insights for a user
+export const cleanupExpiredInsights = async (userId: string) => {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('agent_shared_insights')
+    .delete()
+    .eq('user_id', userId)
+    .lt('expires_at', now);
+  return { error };
+};
+
+// Delete all insights from a specific agent (when agent is deleted)
+export const deleteAgentInsights = async (agentId: string) => {
+  const { error } = await supabase
+    .from('agent_shared_insights')
+    .delete()
+    .eq('source_agent_id', agentId);
+  return { error };
 };

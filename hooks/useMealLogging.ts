@@ -14,6 +14,15 @@ interface PendingMeal {
   message: string;
 }
 
+interface ChatMealData {
+  description: string;
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+}
+
 interface ConfirmMealResult {
   success: boolean;
   finalAnalysis?: MealAnalysis;
@@ -30,6 +39,7 @@ interface UseMealLoggingReturn {
   confirmMeal: (notes?: string) => Promise<ConfirmMealResult>;
   cancelMeal: () => void;
   refreshTodayNutrition: () => Promise<void>;
+  logMealFromChat: (mealData: ChatMealData) => Promise<boolean>;
 }
 
 export function useMealLogging(agent: Agent | null): UseMealLoggingReturn {
@@ -181,6 +191,77 @@ export function useMealLogging(agent: Agent | null): UseMealLoggingReturn {
     setError(null);
   }, []);
 
+  // Log a meal directly from chat (no photo required)
+  const logMealFromChat = useCallback(
+    async (mealData: ChatMealData): Promise<boolean> => {
+      if (!agent) {
+        setError('No agent selected');
+        return false;
+      }
+
+      setSaving(true);
+      setError(null);
+
+      try {
+        // Create the meal log entry
+        const mealLogData: MealLogInsert = {
+          agent_id: agent.id,
+          meal_type: mealData.mealType,
+          description: mealData.description,
+          ai_analysis: {
+            description: mealData.description,
+            mealType: mealData.mealType,
+            calories: mealData.calories,
+            proteinG: mealData.proteinG,
+            carbsG: mealData.carbsG,
+            fatG: mealData.fatG,
+            confidence: 'medium',
+            breakdown: [],
+          } as unknown as Record<string, unknown>,
+          calories: mealData.calories,
+          protein_g: mealData.proteinG,
+          carbs_g: mealData.carbsG,
+          fat_g: mealData.fatG,
+          user_confirmed: true,
+        };
+
+        const { error: mealError } = await createMealLog(mealLogData);
+
+        if (mealError) {
+          console.error('Failed to create meal log from chat:', mealError);
+          setError('Failed to save meal');
+          return false;
+        }
+
+        // Update daily nutrition
+        const persona = agent.persona_json as Record<string, unknown>;
+        const nutritionGoals = persona.nutritionGoals as { calories?: number } | undefined;
+
+        const { data: updatedNutrition } = await updateDailyNutrition(
+          agent.id,
+          mealData.calories,
+          mealData.proteinG,
+          mealData.carbsG,
+          mealData.fatG,
+          nutritionGoals?.calories
+        );
+
+        if (updatedNutrition) {
+          setTodayNutrition(updatedNutrition as DailyNutrition);
+        }
+
+        return true;
+      } catch (err) {
+        console.error('Failed to log meal from chat:', err);
+        setError('Failed to save meal');
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [agent]
+  );
+
   return {
     pendingMeal,
     analyzing,
@@ -191,5 +272,6 @@ export function useMealLogging(agent: Agent | null): UseMealLoggingReturn {
     confirmMeal,
     cancelMeal,
     refreshTodayNutrition,
+    logMealFromChat,
   };
 }

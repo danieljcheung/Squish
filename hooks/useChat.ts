@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Message } from '@/types';
-import { getMessages, getMessageCount, createMessage } from '@/lib/supabase';
+import { getMessages, getMessageCount, createMessage, updateMessageContent } from '@/lib/supabase';
 import { parseError, AppError, ErrorType } from '@/lib/errors';
 
 const PAGE_SIZE = 50;
@@ -206,6 +206,43 @@ export function useChat(agentId: string | undefined) {
     setError(null);
   }, []);
 
+  // Update a message's content in the database and local state
+  const updateMessage = useCallback(
+    async (messageId: string, content: string): Promise<{ data?: Message; error?: AppError }> => {
+      console.log('[useChat.updateMessage] Updating message', messageId);
+      try {
+        const { data, error: updateError } = await updateMessageContent(messageId, content);
+
+        if (updateError) {
+          console.error('[useChat.updateMessage] Update error:', updateError);
+          const appError = parseError(updateError);
+          return { error: appError };
+        }
+
+        if (!data) {
+          console.warn('[useChat.updateMessage] No data returned - RLS policy may be blocking update');
+          // Update local state anyway with the new content
+          setMessages((prev) =>
+            prev.map((m) => (m.id === messageId ? { ...m, content } : m))
+          );
+          return { data: undefined };
+        }
+
+        console.log('[useChat.updateMessage] Update successful, data:', data);
+        const updatedMessage = data as Message;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? updatedMessage : m))
+        );
+        return { data: updatedMessage };
+      } catch (err) {
+        console.error('[useChat.updateMessage] Exception:', err);
+        const appError = parseError(err);
+        return { error: appError };
+      }
+    },
+    []
+  );
+
   return {
     messages,
     loading,
@@ -215,6 +252,7 @@ export function useChat(agentId: string | undefined) {
     hasMore,
     sendUserMessage,
     saveAssistantMessage,
+    updateMessage,
     addLocalMessage,
     removeMessage,
     clearMessages,

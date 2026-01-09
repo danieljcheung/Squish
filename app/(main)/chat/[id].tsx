@@ -39,6 +39,7 @@ import { useWaterLogging } from '@/hooks/useWaterLogging';
 import { useWorkoutLogging, generateWorkoutConfirmation } from '@/hooks/useWorkoutLogging';
 import { useWeeklySummary, detectSummaryRequest } from '@/hooks/useWeeklySummary';
 import { useFinance } from '@/hooks/useFinance';
+import { useSharedInsights } from '@/hooks/useSharedInsights';
 import { useToast } from '@/context/ToastContext';
 import { Slime, ProfileSlime, SlimeColor, SlimeType } from '@/components/slime';
 import { ChatSkeleton, ErrorState } from '@/components/ui';
@@ -47,6 +48,9 @@ import { WaterAmountSheet } from '@/components/ui/WaterAmountSheet';
 import { LogExpenseSheet, EXPENSE_CATEGORIES } from '@/components/ui/LogExpenseSheet';
 import { AddIncomeSheet, INCOME_CATEGORIES } from '@/components/ui/AddIncomeSheet';
 import { LogActionSheet } from '@/components/ui/LogActionSheet';
+import { FitnessLogActionSheet } from '@/components/ui/FitnessLogActionSheet';
+import { LogWorkoutSheet } from '@/components/ui/LogWorkoutSheet';
+import { LogMealSheet } from '@/components/ui/LogMealSheet';
 import { AddBillSheet } from '@/components/ui/AddBillSheet';
 import { EditBillSheet } from '@/components/ui/EditBillSheet';
 import { BillsCard } from '@/components/chat/BillsCard';
@@ -62,13 +66,18 @@ import { useBills, RecurringBill } from '@/hooks/useBills';
 import { getCategoryExpenses, createSavingsGoal, addSavingsContribution, updateSavingsGoalDetails, deleteSavingsGoal } from '@/lib/supabase';
 import { MealAnalysisBubble } from '@/components/chat/MealAnalysisBubble';
 import { MealAnalysisCard } from '@/components/chat/MealAnalysisCard';
+import { PendingMealCard } from '@/components/chat/PendingMealCard';
+import { PendingWaterCard } from '@/components/chat/PendingWaterCard';
+import { PendingWorkoutCard } from '@/components/chat/PendingWorkoutCard';
+import { PendingExpenseCard } from '@/components/chat/PendingExpenseCard';
+import { PendingIncomeCard } from '@/components/chat/PendingIncomeCard';
 import { DailyProgressCard } from '@/components/chat/DailyProgressCard';
 import { FinanceProgressCard } from '@/components/chat/FinanceProgressCard';
 import { QuickActionsBar, QuickAction } from '@/components/chat/QuickActionsBar';
 import { QuickReplies, QuickReply, getContextualReplies } from '@/components/chat/QuickReplies';
 import { WeeklySummaryCard } from '@/components/chat/WeeklySummaryCard';
 import { Message, Agent, WorkoutType, MealAnalysis } from '@/types';
-import { sendMessage as sendToClaudeAPI, generateGreeting, extractExpense, extractIncome, shouldShowBills, shouldShowSummary, shouldShowGoals, detectSummaryPeriod } from '@/lib/claude';
+import { sendMessage as sendToClaudeAPI, generateGreeting, shouldShowBills, shouldShowSummary, shouldShowGoals, detectSummaryPeriod, cleanResponse } from '@/lib/claude';
 import { parseError, ErrorType } from '@/lib/errors';
 
 // Meal analysis message data structure
@@ -128,6 +137,62 @@ interface BillConfirmationMessage {
   autoLog?: boolean;
   isSubscription?: boolean;
   timestamp: string;
+}
+
+// Pending confirmation message types (user must confirm before logging)
+interface PendingMealMessage {
+  type: 'pending_meal';
+  data: {
+    description: string;
+    mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+    calories: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+  };
+  message: string;
+  confirmed?: boolean;
+}
+
+interface PendingWaterMessage {
+  type: 'pending_water';
+  data: {
+    amountMl: number;
+  };
+  message: string;
+  confirmed?: boolean;
+}
+
+interface PendingWorkoutMessage {
+  type: 'pending_workout';
+  data: {
+    type: WorkoutType;
+    durationMins: number;
+  };
+  message: string;
+  confirmed?: boolean;
+}
+
+interface PendingExpenseMessage {
+  type: 'pending_expense';
+  data: {
+    amount: number;
+    category: string;
+    description: string;
+  };
+  message: string;
+  confirmed?: boolean;
+}
+
+interface PendingIncomeMessage {
+  type: 'pending_income';
+  data: {
+    amount: number;
+    category: string;
+    description: string;
+  };
+  message: string;
+  confirmed?: boolean;
 }
 
 // Helper to parse meal analysis from message content
@@ -220,6 +285,68 @@ const parseBillConfirmationMessage = (content: string): BillConfirmationMessage 
   }
 };
 
+// Parsers for pending confirmation messages
+const parsePendingMeal = (content: string): PendingMealMessage | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'pending_meal') {
+      console.log('[parsePendingMeal] Parsed meal, confirmed:', parsed.confirmed);
+      return parsed as PendingMealMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const parsePendingWater = (content: string): PendingWaterMessage | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'pending_water') {
+      return parsed as PendingWaterMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const parsePendingWorkout = (content: string): PendingWorkoutMessage | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'pending_workout') {
+      return parsed as PendingWorkoutMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const parsePendingExpense = (content: string): PendingExpenseMessage | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'pending_expense') {
+      return parsed as PendingExpenseMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const parsePendingIncome = (content: string): PendingIncomeMessage | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'pending_income') {
+      return parsed as PendingIncomeMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 // Agent slime using ProfileSlime with circular accent background
 const AgentSlime = ({
   agent,
@@ -257,6 +384,23 @@ const MessageBubble = ({
   categoryBudgets,
   savingsGoalsForAllocation,
   onAllocateToSavings,
+  // Pending confirmation handlers
+  onConfirmMeal,
+  onAdjustMeal,
+  onConfirmWater,
+  onChangeWater,
+  onConfirmWorkout,
+  onAdjustWorkout,
+  onConfirmExpense,
+  onAdjustExpense,
+  onConfirmIncome,
+  onAdjustIncome,
+  // Pending card state data
+  todayWaterMl = 0,
+  waterGoalMl = 2000,
+  weeklyWorkoutCount = 0,
+  workoutStreak = 0,
+  pendingLoading = false,
 }: {
   message: Message;
   agent?: Agent | null;
@@ -323,6 +467,23 @@ const MessageBubble = ({
   categoryBudgets?: Record<string, { spent: number; budget: number; remaining: number }>;
   savingsGoalsForAllocation?: { id: string; name: string; icon: string }[];
   onAllocateToSavings?: (goalId: string, amount: number) => void;
+  // Pending confirmation handlers (include messageId and full parsed message for updating confirmed status)
+  onConfirmMeal?: (messageId: string, data: PendingMealMessage['data'], parsedMessage: PendingMealMessage) => void;
+  onAdjustMeal?: (messageId: string, data: PendingMealMessage['data'], parsedMessage: PendingMealMessage) => void;
+  onConfirmWater?: (messageId: string, amountMl: number, parsedMessage: PendingWaterMessage) => void;
+  onChangeWater?: () => void;
+  onConfirmWorkout?: (messageId: string, type: WorkoutType, durationMins: number, parsedMessage: PendingWorkoutMessage) => void;
+  onAdjustWorkout?: () => void;
+  onConfirmExpense?: (messageId: string, data: PendingExpenseMessage['data'], parsedMessage: PendingExpenseMessage) => void;
+  onAdjustExpense?: () => void;
+  onConfirmIncome?: (messageId: string, data: PendingIncomeMessage['data'], parsedMessage: PendingIncomeMessage) => void;
+  onAdjustIncome?: () => void;
+  // Pending card state data
+  todayWaterMl?: number;
+  waterGoalMl?: number;
+  weeklyWorkoutCount?: number;
+  workoutStreak?: number;
+  pendingLoading?: boolean;
 }) => {
   const { colors: themeColors, isDarkMode } = useTheme();
   const isUser = message.role === 'user';
@@ -347,6 +508,13 @@ const MessageBubble = ({
 
   // Check if this is a bill confirmation message
   const billConfirmation = !isUser ? parseBillConfirmationMessage(message.content) : null;
+
+  // Check for pending confirmation messages
+  const pendingMeal = !isUser ? parsePendingMeal(message.content) : null;
+  const pendingWater = !isUser ? parsePendingWater(message.content) : null;
+  const pendingWorkout = !isUser ? parsePendingWorkout(message.content) : null;
+  const pendingExpense = !isUser ? parsePendingExpense(message.content) : null;
+  const pendingIncome = !isUser ? parsePendingIncome(message.content) : null;
 
   // Render meal analysis card for assistant messages
   if (mealAnalysis) {
@@ -551,6 +719,145 @@ const MessageBubble = ({
     );
   }
 
+  // Render pending meal confirmation card
+  if (pendingMeal) {
+    return (
+      <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+        <View style={styles.avatarSmall}>
+          <AgentSlime agent={agent} size={32} />
+        </View>
+        <View style={styles.pendingCardWrapper}>
+          <PendingMealCard
+            data={pendingMeal.data}
+            onConfirm={() => onConfirmMeal?.(message.id, pendingMeal.data, pendingMeal)}
+            onAdjust={() => onAdjustMeal?.(message.id, pendingMeal.data, pendingMeal)}
+            isLoading={pendingLoading}
+            isConfirmed={pendingMeal.confirmed}
+          />
+          <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Render pending water confirmation card
+  if (pendingWater) {
+    return (
+      <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+        <View style={styles.avatarSmall}>
+          <AgentSlime agent={agent} size={32} />
+        </View>
+        <View style={styles.pendingCardWrapper}>
+          <PendingWaterCard
+            data={pendingWater.data}
+            onConfirm={() => onConfirmWater?.(message.id, pendingWater.data.amountMl, pendingWater)}
+            onChange={() => onChangeWater?.()}
+            isLoading={pendingLoading}
+            isConfirmed={pendingWater.confirmed}
+            todayTotal={todayWaterMl}
+            goalMl={waterGoalMl}
+          />
+          <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Render pending workout confirmation card
+  if (pendingWorkout) {
+    return (
+      <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+        <View style={styles.avatarSmall}>
+          <AgentSlime agent={agent} size={32} />
+        </View>
+        <View style={styles.pendingCardWrapper}>
+          <PendingWorkoutCard
+            data={pendingWorkout.data}
+            onConfirm={() => onConfirmWorkout?.(message.id, pendingWorkout.data.type, pendingWorkout.data.durationMins, pendingWorkout)}
+            onAdjust={() => onAdjustWorkout?.()}
+            isLoading={pendingLoading}
+            isConfirmed={pendingWorkout.confirmed}
+            weeklyCount={weeklyWorkoutCount}
+            streak={workoutStreak}
+          />
+          <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Render pending expense confirmation card
+  if (pendingExpense) {
+    return (
+      <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+        <View style={styles.avatarSmall}>
+          <AgentSlime agent={agent} size={32} />
+        </View>
+        <View style={styles.pendingCardWrapper}>
+          <PendingExpenseCard
+            data={pendingExpense.data}
+            onConfirm={() => onConfirmExpense?.(message.id, pendingExpense.data, pendingExpense)}
+            onAdjust={() => onAdjustExpense?.()}
+            isLoading={pendingLoading}
+            isConfirmed={pendingExpense.confirmed}
+            currencySymbol={currencySymbol}
+          />
+          <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Render pending income confirmation card
+  if (pendingIncome) {
+    return (
+      <View style={[styles.messageContainer, styles.agentMessageContainer]}>
+        <View style={styles.avatarSmall}>
+          <AgentSlime agent={agent} size={32} />
+        </View>
+        <View style={styles.pendingCardWrapper}>
+          <PendingIncomeCard
+            data={pendingIncome.data}
+            onConfirm={() => onConfirmIncome?.(message.id, pendingIncome.data, pendingIncome)}
+            onAdjust={() => onAdjustIncome?.()}
+            isLoading={pendingLoading}
+            isConfirmed={pendingIncome.confirmed}
+            currencySymbol={currencySymbol}
+          />
+          <Text style={[styles.timestamp, styles.cardTimestamp, { color: themeColors.textMuted }]}>
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Clean the message content for display (handles JSON-encoded messages)
+  const displayContent = isUser ? message.content : cleanResponse(message.content);
+
   return (
     <View
       style={[
@@ -571,7 +878,7 @@ const MessageBubble = ({
         isError && styles.errorBubble,
       ]}>
         <Text style={[styles.bubbleText, { color: isUser ? '#101914' : themeColors.text }, isError && styles.errorText]}>
-          {message.content}
+          {displayContent}
         </Text>
         <View style={styles.bubbleFooter}>
           <Text style={[styles.timestamp, { color: isUser ? '#101914' : themeColors.textMuted, opacity: isUser ? 0.6 : 0.7 }, isError && styles.errorTimestamp]}>
@@ -715,6 +1022,7 @@ export default function ChatScreen() {
     hasMore,
     sendUserMessage,
     saveAssistantMessage,
+    updateMessage,
     loadMore,
     refetch,
   } = useChat(id);
@@ -739,6 +1047,9 @@ export default function ChatScreen() {
   // Bills hook
   const bills = useBills(agent);
 
+  // Cross-agent shared insights hook
+  const sharedInsights = useSharedInsights(agent);
+
   const scrollViewRef = useRef<ScrollView>(null);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -752,6 +1063,10 @@ export default function ChatScreen() {
   const [showExpenseSheet, setShowExpenseSheet] = useState(false);
   const [showIncomeSheet, setShowIncomeSheet] = useState(false);
   const [showLogActionSheet, setShowLogActionSheet] = useState(false);
+  const [showFitnessLogActionSheet, setShowFitnessLogActionSheet] = useState(false);
+  const [showWorkoutSheet, setShowWorkoutSheet] = useState(false);
+  const [showMealSheet, setShowMealSheet] = useState(false);
+  const [pendingMealToAdjust, setPendingMealToAdjust] = useState<{ messageId: string; data: PendingMealMessage['data']; parsedMessage: PendingMealMessage } | null>(null);
   const [showBillSheet, setShowBillSheet] = useState(false);
   const [showEditBillSheet, setShowEditBillSheet] = useState(false);
   const [selectedBill, setSelectedBill] = useState<RecurringBill | null>(null);
@@ -1064,8 +1379,195 @@ export default function ChatScreen() {
     }
   };
 
-  // Check if this is a finance agent
-  const isFinanceAgent = agent?.type === 'finance' || agent?.type === 'budget_helper';
+  // Handle workout logging from sheet
+  const handleLogWorkout = async (type: WorkoutType, durationMins: number, notes?: string) => {
+    const log = await workoutLogging.logWorkout(type, durationMins, notes);
+    if (log) {
+      await triggerHaptic('success');
+      const weeklyCount = (workoutLogging.weeklyStats?.totalWorkouts || 0) + 1;
+      const streak = workoutLogging.weeklyStats?.streak || 1;
+
+      // Generate and send confirmation message
+      const confirmationMsg = generateWorkoutConfirmation(type, durationMins, weeklyCount, streak);
+      await saveAssistantMessage(confirmationMsg);
+
+      showToast({
+        type: 'success',
+        message: 'Workout logged!',
+        duration: 2000,
+      });
+
+      // Post workout insight
+      sharedInsights.postInsight('workout_logged', {
+        type,
+        duration: durationMins,
+        streak_count: streak,
+      });
+
+      // Post streak milestone insight (3+ days)
+      if (streak >= 3) {
+        sharedInsights.postInsight('streak_achieved', {
+          activity: 'workout',
+          count: streak,
+        });
+      }
+
+      // Refresh data
+      mealLogging.refreshTodayNutrition();
+      scrollToBottom();
+    } else if (workoutLogging.error) {
+      await triggerHaptic('error');
+      showError(workoutLogging.error);
+    }
+  };
+
+  // Handle confirming a meal from chat (pending card)
+  const handleConfirmMealFromChat = async (messageId: string, data: PendingMealMessage['data'], parsedMessage: PendingMealMessage) => {
+    const success = await mealLogging.logMealFromChat(data);
+    if (success) {
+      await triggerHaptic('success');
+      showToast({
+        type: 'success',
+        message: 'Meal logged!',
+        duration: 2000,
+      });
+      // Mark the message as confirmed in the database
+      const updatedContent = JSON.stringify({ ...parsedMessage, confirmed: true });
+      console.log('[handleConfirmMealFromChat] Updating message', messageId, 'with confirmed:', updatedContent);
+      const result = await updateMessage(messageId, updatedContent);
+      console.log('[handleConfirmMealFromChat] Update result:', result);
+      mealLogging.refreshTodayNutrition();
+
+      // Post insight for high-protein meals (>30g)
+      if (data.proteinG && data.proteinG > 30) {
+        sharedInsights.postInsight('meal_logged', {
+          high_protein: true,
+          calories: data.calories,
+          protein_g: data.proteinG,
+        });
+      }
+    } else {
+      await triggerHaptic('error');
+      showError(mealLogging.error || 'Failed to log meal');
+    }
+  };
+
+  // Handle confirming water from chat (pending card)
+  const handleConfirmWaterFromChat = async (messageId: string, amountMl: number, parsedMessage: PendingWaterMessage) => {
+    const log = await waterLogging.logWater(amountMl);
+    if (log) {
+      await triggerHaptic('success');
+      const glasses = Math.round((waterLogging.todayWaterMl + amountMl) / 250);
+      const goalGlasses = Math.round(waterLogging.waterGoalMl / 250);
+      showToast({
+        type: 'success',
+        message: `${amountMl}ml logged! ${glasses}/${goalGlasses} glasses today`,
+        duration: 2000,
+      });
+      // Mark the message as confirmed in the database
+      await updateMessage(messageId, JSON.stringify({ ...parsedMessage, confirmed: true }));
+      mealLogging.refreshTodayNutrition();
+    } else if (waterLogging.error) {
+      await triggerHaptic('error');
+      showError(waterLogging.error);
+    }
+  };
+
+  // Handle confirming workout from chat (pending card)
+  const handleConfirmWorkoutFromChat = async (messageId: string, type: WorkoutType, durationMins: number, parsedMessage: PendingWorkoutMessage) => {
+    const log = await workoutLogging.logWorkout(type, durationMins);
+    if (log) {
+      await triggerHaptic('success');
+      const weeklyCount = (workoutLogging.weeklyStats?.totalWorkouts || 0) + 1;
+      const streak = workoutLogging.weeklyStats?.streak || 1;
+      const confirmationMsg = generateWorkoutConfirmation(type, durationMins, weeklyCount, streak);
+      await saveAssistantMessage(confirmationMsg);
+      showToast({
+        type: 'success',
+        message: 'Workout logged!',
+        duration: 2000,
+      });
+      // Mark the message as confirmed in the database
+      await updateMessage(messageId, JSON.stringify({ ...parsedMessage, confirmed: true }));
+      mealLogging.refreshTodayNutrition();
+      scrollToBottom();
+
+      // Post workout insight
+      sharedInsights.postInsight('workout_logged', {
+        type,
+        duration: durationMins,
+        streak_count: streak,
+      });
+
+      // Post streak milestone insight (3+ days)
+      if (streak >= 3) {
+        sharedInsights.postInsight('streak_achieved', {
+          activity: 'workout',
+          count: streak,
+        });
+      }
+    } else if (workoutLogging.error) {
+      await triggerHaptic('error');
+      showError(workoutLogging.error);
+    }
+  };
+
+  // Handle confirming expense from chat (pending card)
+  const handleConfirmExpenseFromChat = async (messageId: string, data: PendingExpenseMessage['data'], parsedMessage: PendingExpenseMessage) => {
+    const result = await finance.logExpense({
+      amount: data.amount,
+      category: data.category,
+      description: data.description,
+    });
+    if (result) {
+      await triggerHaptic('success');
+      showToast({
+        type: 'success',
+        message: `${getCurrencySymbol()}${data.amount} expense logged!`,
+        duration: 2000,
+      });
+      // Mark the message as confirmed in the database
+      await updateMessage(messageId, JSON.stringify({ ...parsedMessage, confirmed: true }));
+
+      // Post insight for large expenses (>$50)
+      if (data.amount > 50) {
+        sharedInsights.postInsight('expense_logged', {
+          category: data.category,
+          amount: data.amount,
+          is_high: true,
+        });
+      }
+    } else {
+      await triggerHaptic('error');
+      showError('Failed to log expense');
+    }
+  };
+
+  // Handle confirming income from chat (pending card)
+  const handleConfirmIncomeFromChat = async (messageId: string, data: PendingIncomeMessage['data'], parsedMessage: PendingIncomeMessage) => {
+    const result = await finance.logIncome({
+      amount: data.amount,
+      category: data.category,
+      description: data.description,
+    });
+    if (result) {
+      await triggerHaptic('success');
+      showToast({
+        type: 'success',
+        message: `${getCurrencySymbol()}${data.amount} income added!`,
+        duration: 2000,
+      });
+      // Mark the message as confirmed in the database
+      await updateMessage(messageId, JSON.stringify({ ...parsedMessage, confirmed: true }));
+    } else {
+      await triggerHaptic('error');
+      showError('Failed to add income');
+    }
+  };
+
+  // Check if this is a finance agent (handles both 'finance' and 'budget_helper' type values)
+  // Cast to string because DB may store 'finance' but TypeScript type expects 'budget_helper'
+  const isFinanceAgent = agent?.type === 'budget_helper' || (agent?.type as string) === 'finance';
 
   // Get currency symbol from agent
   const getCurrencySymbol = () => {
@@ -1089,12 +1591,20 @@ export default function ChatScreen() {
     setShowIncomeSheet(true);
   };
 
-  // Handle opening log action sheet (grouped Log button)
+  // Handle opening log action sheet (grouped Log button for finance)
   const handleLogPress = () => {
     triggerHaptic('light');
     setShowQuickActions(false);
     toggleRotation.value = withTiming(0, { duration: 200 });
     setShowLogActionSheet(true);
+  };
+
+  // Handle opening fitness log action sheet (grouped Log button for fitness)
+  const handleFitnessLogPress = () => {
+    triggerHaptic('light');
+    setShowQuickActions(false);
+    toggleRotation.value = withTiming(0, { duration: 200 });
+    setShowFitnessLogActionSheet(true);
   };
 
   // Handle opening add bill sheet
@@ -1380,6 +1890,15 @@ export default function ChatScreen() {
         timestamp: new Date().toISOString(),
       };
       await saveAssistantMessage(JSON.stringify(logConfirmation));
+
+      // Post insight for large expenses (>$50)
+      if (expense.amount > 50) {
+        sharedInsights.postInsight('expense_logged', {
+          category: expense.category,
+          amount: expense.amount,
+          is_high: true,
+        });
+      }
     } else {
       await triggerHaptic('error');
       showError('Failed to log expense');
@@ -1421,39 +1940,10 @@ export default function ChatScreen() {
   // Quick actions for fitness coach
   const fitnessQuickActions: QuickAction[] = [
     {
-      id: 'log-meal',
-      label: 'Log Meal',
-      icon: 'camera-outline',
-      onPress: handleCameraPress,
-    },
-    {
-      id: 'log-water',
-      label: 'Log Water',
-      icon: 'water-outline',
-      onPress: handleLogWater,
-      onLongPress: handleLogWaterLongPress,
-    },
-    {
-      id: 'log-workout',
-      label: 'Log Workout',
-      icon: 'barbell-outline',
-      onPress: () => {
-        triggerHaptic('light');
-        setShowQuickActions(false);
-        toggleRotation.value = withTiming(0, { duration: 200 });
-        handleSend("I want to log a workout");
-      },
-    },
-    {
-      id: 'check-progress',
-      label: 'My Progress',
-      icon: 'stats-chart-outline',
-      onPress: () => {
-        triggerHaptic('light');
-        setShowQuickActions(false);
-        toggleRotation.value = withTiming(0, { duration: 200 });
-        handleSend("How am I doing with my goals?");
-      },
+      id: 'log',
+      label: 'Log',
+      icon: 'add-circle-outline',
+      onPress: handleFitnessLogPress,
     },
     {
       id: 'weekly-summary',
@@ -1469,28 +1959,6 @@ export default function ChatScreen() {
         } else if (weeklySummary.error) {
           showError(weeklySummary.error);
         }
-      },
-    },
-    {
-      id: 'get-tips',
-      label: 'Quick Tips',
-      icon: 'bulb-outline',
-      onPress: () => {
-        triggerHaptic('light');
-        setShowQuickActions(false);
-        toggleRotation.value = withTiming(0, { duration: 200 });
-        handleSend("Give me a quick fitness tip!");
-      },
-    },
-    {
-      id: 'motivation',
-      label: 'Motivate Me',
-      icon: 'flame-outline',
-      onPress: () => {
-        triggerHaptic('light');
-        setShowQuickActions(false);
-        toggleRotation.value = withTiming(0, { duration: 200 });
-        handleSend("I need some motivation today!");
       },
     },
   ];
@@ -1698,12 +2166,17 @@ export default function ChatScreen() {
     setIsTyping(true);
 
     try {
-      // Call Claude API with agent context and memories
-      const { response, newMemories, workout, expense, income, showBills, showSummary, showGoals, showBudget, summaryPeriod } = await sendToClaudeAPI(
+      // Fetch insights from other agents for cross-agent context
+      const otherInsights = await sharedInsights.getOtherAgentInsights();
+      const insightsPrompt = sharedInsights.formatInsightsForPrompt(otherInsights);
+
+      // Call Claude API with agent context, memories, and cross-agent insights
+      const { response, newMemories, workoutConfirm, mealConfirm, waterConfirm, expenseConfirm, incomeConfirm, showBills, showSummary, showGoals, showBudget, summaryPeriod } = await sendToClaudeAPI(
         agent,
         messages,
         memories,
-        messageText
+        messageText,
+        insightsPrompt
       );
 
       // Save any new memories extracted from Claude's response
@@ -1712,84 +2185,109 @@ export default function ChatScreen() {
         console.log(`Saved ${savedCount} new memories`);
       }
 
-      // If Claude detected a workout to log, save it
-      if (workout) {
-        const workoutLog = await workoutLogging.logWorkout(
-          workout.type as WorkoutType,
-          workout.duration,
-          messageText
-        );
-        if (workoutLog) {
-          console.log('Workout logged from Claude response:', workoutLog);
-          // Refresh nutrition data to update progress card
-          mealLogging.refreshTodayNutrition();
+      // Track if we saved a pending confirmation message
+      let savedPendingConfirmation = false;
+
+      // Handle fitness confirmations (show pending cards, don't auto-log)
+      if (!isFinanceAgent) {
+        if (workoutConfirm) {
+          // Save as pending_workout message - user must confirm
+          const pendingMsg: PendingWorkoutMessage = {
+            type: 'pending_workout',
+            data: {
+              type: workoutConfirm.type as WorkoutType,
+              durationMins: workoutConfirm.duration,
+            },
+            message: response,
+          };
+          await saveAssistantMessage(JSON.stringify(pendingMsg));
+          savedPendingConfirmation = true;
+        } else if (mealConfirm) {
+          // Save as pending_meal message - user must confirm
+          const pendingMsg: PendingMealMessage = {
+            type: 'pending_meal',
+            data: mealConfirm,
+            message: response,
+          };
+          await saveAssistantMessage(JSON.stringify(pendingMsg));
+          savedPendingConfirmation = true;
+        } else if (waterConfirm) {
+          // Save as pending_water message - user must confirm
+          const pendingMsg: PendingWaterMessage = {
+            type: 'pending_water',
+            data: waterConfirm,
+            message: response,
+          };
+          await saveAssistantMessage(JSON.stringify(pendingMsg));
+          savedPendingConfirmation = true;
         }
       }
 
-      // If Claude detected an expense to log, save it to database
-      if (expense && isFinanceAgent) {
-        const result = await finance.logExpense({
-          amount: expense.amount,
-          category: expense.category,
-          description: expense.description,
-        });
-        if (result) {
-          console.log('Expense logged from Claude response:', result);
-        }
-      }
-
-      // If Claude detected income to log, save it to database
-      if (income && isFinanceAgent) {
-        const result = await finance.logIncome({
-          amount: income.amount,
-          category: income.category,
-          description: income.description,
-        });
-        if (result) {
-          console.log('Income logged from Claude response:', result);
-        }
-      }
-
-      // Handle special card message types for finance agent
+      // Handle finance confirmations (show pending cards, don't auto-log)
       if (isFinanceAgent) {
-        if (showBills) {
-          // Refresh bills data first
-          await bills.refresh();
-          // Save as bills_card type with the text message
-          const billsMsg: BillsMessage = {
-            type: 'bills_card',
+        if (expenseConfirm) {
+          // Save as pending_expense message - user must confirm
+          const pendingMsg: PendingExpenseMessage = {
+            type: 'pending_expense',
+            data: expenseConfirm,
             message: response,
           };
-          await saveAssistantMessage(JSON.stringify(billsMsg));
-        } else if (showSummary) {
-          // Save as summary_card type with period
-          const summaryMsg: SummaryMessage = {
-            type: 'summary_card',
-            message: response,
-            period: summaryPeriod,
-          };
-          await saveAssistantMessage(JSON.stringify(summaryMsg));
-        } else if (showGoals) {
-          // Save as goals_card type
-          const goalsMsg: GoalsMessage = {
-            type: 'goals_card',
+          await saveAssistantMessage(JSON.stringify(pendingMsg));
+          savedPendingConfirmation = true;
+        } else if (incomeConfirm) {
+          // Save as pending_income message - user must confirm
+          const pendingMsg: PendingIncomeMessage = {
+            type: 'pending_income',
+            data: incomeConfirm,
             message: response,
           };
-          await saveAssistantMessage(JSON.stringify(goalsMsg));
-        } else if (showBudget) {
-          // Save as budget_card type
-          const budgetMsg: BudgetMessage = {
-            type: 'budget_card',
-            message: response,
-          };
-          await saveAssistantMessage(JSON.stringify(budgetMsg));
+          await saveAssistantMessage(JSON.stringify(pendingMsg));
+          savedPendingConfirmation = true;
+        }
+      }
+
+      // Handle special card message types (only if no pending confirmation was saved)
+      if (!savedPendingConfirmation) {
+        if (isFinanceAgent) {
+          if (showBills) {
+            // Refresh bills data first
+            await bills.refresh();
+            // Save as bills_card type with the text message
+            const billsMsg: BillsMessage = {
+              type: 'bills_card',
+              message: response,
+            };
+            await saveAssistantMessage(JSON.stringify(billsMsg));
+          } else if (showSummary) {
+            // Save as summary_card type with period
+            const summaryMsg: SummaryMessage = {
+              type: 'summary_card',
+              message: response,
+              period: summaryPeriod,
+            };
+            await saveAssistantMessage(JSON.stringify(summaryMsg));
+          } else if (showGoals) {
+            // Save as goals_card type
+            const goalsMsg: GoalsMessage = {
+              type: 'goals_card',
+              message: response,
+            };
+            await saveAssistantMessage(JSON.stringify(goalsMsg));
+          } else if (showBudget) {
+            // Save as budget_card type
+            const budgetMsg: BudgetMessage = {
+              type: 'budget_card',
+              message: response,
+            };
+            await saveAssistantMessage(JSON.stringify(budgetMsg));
+          } else {
+            // Save regular assistant response to Supabase
+            await saveAssistantMessage(response);
+          }
         } else {
           // Save regular assistant response to Supabase
           await saveAssistantMessage(response);
         }
-      } else {
-        // Save regular assistant response to Supabase
-        await saveAssistantMessage(response);
       }
 
       // Scroll to show the response
@@ -1842,79 +2340,115 @@ export default function ChatScreen() {
     setIsTyping(true);
 
     try {
-      const { response, newMemories, workout, expense, income, showBills, showSummary, showGoals, showBudget, summaryPeriod } = await sendToClaudeAPI(
+      // Fetch insights from other agents for cross-agent context
+      const otherInsights = await sharedInsights.getOtherAgentInsights();
+      const insightsPrompt = sharedInsights.formatInsightsForPrompt(otherInsights);
+
+      const { response, newMemories, workoutConfirm, mealConfirm, waterConfirm, expenseConfirm, incomeConfirm, showBills, showSummary, showGoals, showBudget, summaryPeriod } = await sendToClaudeAPI(
         agent,
         messages.filter(m => m.id !== errorMessageId), // Exclude error message
         memories,
-        lastFailedMessage
+        lastFailedMessage,
+        insightsPrompt
       );
 
       if (newMemories.length > 0) {
         await saveMemories(newMemories);
       }
 
-      // If Claude detected a workout to log, save it
-      if (workout) {
-        await workoutLogging.logWorkout(
-          workout.type as WorkoutType,
-          workout.duration,
-          lastFailedMessage
-        );
-        mealLogging.refreshTodayNutrition();
+      // Track if we saved a pending confirmation message
+      let savedPendingConfirmation = false;
+
+      // Handle fitness confirmations (show pending cards, don't auto-log)
+      if (!isFinanceAgent) {
+        if (workoutConfirm) {
+          const pendingMsg: PendingWorkoutMessage = {
+            type: 'pending_workout',
+            data: {
+              type: workoutConfirm.type as WorkoutType,
+              durationMins: workoutConfirm.duration,
+            },
+            message: response,
+          };
+          await saveAssistantMessage(JSON.stringify(pendingMsg));
+          savedPendingConfirmation = true;
+        } else if (mealConfirm) {
+          const pendingMsg: PendingMealMessage = {
+            type: 'pending_meal',
+            data: mealConfirm,
+            message: response,
+          };
+          await saveAssistantMessage(JSON.stringify(pendingMsg));
+          savedPendingConfirmation = true;
+        } else if (waterConfirm) {
+          const pendingMsg: PendingWaterMessage = {
+            type: 'pending_water',
+            data: waterConfirm,
+            message: response,
+          };
+          await saveAssistantMessage(JSON.stringify(pendingMsg));
+          savedPendingConfirmation = true;
+        }
       }
 
-      // If Claude detected an expense to log, save it to database
-      if (expense && isFinanceAgent) {
-        await finance.logExpense({
-          amount: expense.amount,
-          category: expense.category,
-          description: expense.description,
-        });
-      }
-
-      // If Claude detected income to log, save it to database
-      if (income && isFinanceAgent) {
-        await finance.logIncome({
-          amount: income.amount,
-          category: income.category,
-          description: income.description,
-        });
-      }
-
-      // Handle special card message types for finance agent
+      // Handle finance confirmations (show pending cards, don't auto-log)
       if (isFinanceAgent) {
-        if (showBills) {
-          await bills.refresh();
-          const billsMsg: BillsMessage = {
-            type: 'bills_card',
+        if (expenseConfirm) {
+          const pendingMsg: PendingExpenseMessage = {
+            type: 'pending_expense',
+            data: expenseConfirm,
             message: response,
           };
-          await saveAssistantMessage(JSON.stringify(billsMsg));
-        } else if (showSummary) {
-          const summaryMsg: SummaryMessage = {
-            type: 'summary_card',
-            message: response,
-            period: summaryPeriod,
-          };
-          await saveAssistantMessage(JSON.stringify(summaryMsg));
-        } else if (showGoals) {
-          const goalsMsg: GoalsMessage = {
-            type: 'goals_card',
+          await saveAssistantMessage(JSON.stringify(pendingMsg));
+          savedPendingConfirmation = true;
+        } else if (incomeConfirm) {
+          const pendingMsg: PendingIncomeMessage = {
+            type: 'pending_income',
+            data: incomeConfirm,
             message: response,
           };
-          await saveAssistantMessage(JSON.stringify(goalsMsg));
-        } else if (showBudget) {
-          const budgetMsg: BudgetMessage = {
-            type: 'budget_card',
-            message: response,
-          };
-          await saveAssistantMessage(JSON.stringify(budgetMsg));
+          await saveAssistantMessage(JSON.stringify(pendingMsg));
+          savedPendingConfirmation = true;
+        }
+      }
+
+      // Handle special card message types (only if no pending confirmation was saved)
+      if (!savedPendingConfirmation) {
+        if (isFinanceAgent) {
+          if (showBills) {
+            await bills.refresh();
+            const billsMsg: BillsMessage = {
+              type: 'bills_card',
+              message: response,
+            };
+            await saveAssistantMessage(JSON.stringify(billsMsg));
+          } else if (showSummary) {
+            const summaryMsg: SummaryMessage = {
+              type: 'summary_card',
+              message: response,
+              period: summaryPeriod,
+            };
+            await saveAssistantMessage(JSON.stringify(summaryMsg));
+          } else if (showGoals) {
+            const goalsMsg: GoalsMessage = {
+              type: 'goals_card',
+              message: response,
+            };
+            await saveAssistantMessage(JSON.stringify(goalsMsg));
+          } else if (showBudget) {
+            const budgetMsg: BudgetMessage = {
+              type: 'budget_card',
+              message: response,
+            };
+            await saveAssistantMessage(JSON.stringify(budgetMsg));
+          } else {
+            await saveAssistantMessage(response);
+          }
         } else {
           await saveAssistantMessage(response);
         }
-      } else {
-        await saveAssistantMessage(response);
       }
+
       setLastFailedMessage(null);
       await triggerHaptic('success');
 
@@ -2187,6 +2721,26 @@ export default function ChatScreen() {
                   icon: g.icon,
                 })) : undefined}
                 onAllocateToSavings={handleAddFundsToGoal}
+                // Pending confirmation handlers
+                onConfirmMeal={handleConfirmMealFromChat}
+                onAdjustMeal={(messageId, data, parsedMessage) => {
+                  setPendingMealToAdjust({ messageId, data, parsedMessage });
+                  setShowMealSheet(true);
+                }}
+                onConfirmWater={handleConfirmWaterFromChat}
+                onChangeWater={() => setShowWaterSheet(true)}
+                onConfirmWorkout={handleConfirmWorkoutFromChat}
+                onAdjustWorkout={() => setShowWorkoutSheet(true)}
+                onConfirmExpense={handleConfirmExpenseFromChat}
+                onAdjustExpense={() => setShowExpenseSheet(true)}
+                onConfirmIncome={handleConfirmIncomeFromChat}
+                onAdjustIncome={() => setShowIncomeSheet(true)}
+                // Pending card state data
+                todayWaterMl={waterLogging.todayWaterMl}
+                waterGoalMl={waterLogging.waterGoalMl}
+                weeklyWorkoutCount={workoutLogging.weeklyStats?.totalWorkouts || 0}
+                workoutStreak={workoutLogging.weeklyStats?.streak || 0}
+                pendingLoading={mealLogging.saving || workoutLogging.logging || waterLogging.logging}
               />
             ))}
             {isTyping && <TypingIndicator agent={agent} />}
@@ -2371,6 +2925,56 @@ export default function ChatScreen() {
             duration: 2000,
           });
         }}
+      />
+
+      {/* Fitness Log Action Sheet (grouped Log button menu for fitness) */}
+      <FitnessLogActionSheet
+        visible={showFitnessLogActionSheet}
+        onClose={() => setShowFitnessLogActionSheet(false)}
+        onLogMeal={handleCameraPress}
+        onLogWater={() => setShowWaterSheet(true)}
+        onLogWorkout={() => {
+          setShowFitnessLogActionSheet(false);
+          setShowWorkoutSheet(true);
+        }}
+      />
+
+      {/* Log Workout Sheet */}
+      <LogWorkoutSheet
+        visible={showWorkoutSheet}
+        onClose={() => setShowWorkoutSheet(false)}
+        onLog={handleLogWorkout}
+        loading={workoutLogging.logging}
+      />
+
+      {/* Log Meal Sheet (for adjusting pending meals) */}
+      <LogMealSheet
+        visible={showMealSheet}
+        onClose={() => {
+          setShowMealSheet(false);
+          setPendingMealToAdjust(null);
+        }}
+        initialData={pendingMealToAdjust?.data || undefined}
+        onLog={async (data) => {
+          if (pendingMealToAdjust) {
+            // Adjusting a pending meal - use the original message to mark as confirmed
+            await handleConfirmMealFromChat(pendingMealToAdjust.messageId, data, { ...pendingMealToAdjust.parsedMessage, data });
+          } else {
+            // Manual meal entry without a pending card - just log directly
+            const success = await mealLogging.logMealFromChat(data);
+            // Post insight for high-protein meals (>30g)
+            if (success && data.proteinG && data.proteinG > 30) {
+              sharedInsights.postInsight('meal_logged', {
+                high_protein: true,
+                calories: data.calories,
+                protein_g: data.proteinG,
+              });
+            }
+          }
+          setShowMealSheet(false);
+          setPendingMealToAdjust(null);
+        }}
+        loading={mealLogging.saving}
       />
 
       {/* Add Bill Sheet */}
@@ -2573,6 +3177,17 @@ const styles = StyleSheet.create({
   billsCardWrapper: {
     maxWidth: '90%',
     flex: 1,
+  },
+  // Pending confirmation card wrapper
+  pendingCardWrapper: {
+    maxWidth: '90%',
+    flex: 1,
+    gap: spacing.sm,
+  },
+  pendingMessage: {
+    fontSize: 15,
+    fontFamily: fonts.regular,
+    lineHeight: 22,
   },
   cardTimestamp: {
     marginTop: spacing.xs,
