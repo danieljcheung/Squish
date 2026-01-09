@@ -41,7 +41,7 @@ import { useWeeklySummary, detectSummaryRequest } from '@/hooks/useWeeklySummary
 import { useFinance } from '@/hooks/useFinance';
 import { useToast } from '@/context/ToastContext';
 import { Slime, ProfileSlime, SlimeColor, SlimeType } from '@/components/slime';
-import { NoMessagesEmptyState, ChatSkeleton, ErrorState } from '@/components/ui';
+import { ChatSkeleton, ErrorState } from '@/components/ui';
 import { PhotoOptionsSheet } from '@/components/ui/PhotoOptionsSheet';
 import { WaterAmountSheet } from '@/components/ui/WaterAmountSheet';
 import { LogExpenseSheet, EXPENSE_CATEGORIES } from '@/components/ui/LogExpenseSheet';
@@ -702,7 +702,7 @@ const AnalyzingIndicator = ({ agent }: { agent?: Agent | null }) => {
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, slimeColor: passedSlimeColor, slimeType: passedSlimeType } = useLocalSearchParams<{ id: string; slimeColor?: string; slimeType?: string }>();
   const { colors: themeColors, isDarkMode } = useTheme();
   const { agent, loading: agentLoading, error: agentError } = useAgent(id);
   const { memories, saveMemories, loading: memoriesLoading } = useAgentMemory(id);
@@ -1937,11 +1937,27 @@ export default function ChatScreen() {
 
   const loading = agentLoading || messagesLoading || memoriesLoading;
 
+  // Use agent data if available, then passed params (from creation), then defaults
+  const loadingSlimeColor = (agent?.persona_json?.slime_color || passedSlimeColor || 'mint') as SlimeColor;
+  const loadingSlimeType = (agent?.type || passedSlimeType || 'base') as SlimeType;
+
   if (loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}>
-        <Slime color="mint" type="base" size="small" animated />
+        <Slime color={loadingSlimeColor} type={loadingSlimeType} size="small" animated />
         <Text style={[styles.loadingText, { color: themeColors.textMuted }]}>Loading chat...</Text>
+      </View>
+    );
+  }
+
+  // Handle error or missing agent
+  if (agentError || !agent) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}>
+        <ErrorState
+          message={agentError?.message || "Couldn't load this Squish"}
+          onRetry={() => router.back()}
+        />
       </View>
     );
   }
@@ -2012,10 +2028,9 @@ export default function ChatScreen() {
           />
         }
       >
-        {messagesLoading ? (
+        {messagesLoading || messages.length === 0 ? (
+          // Show skeleton while loading or waiting for welcome message to be generated
           <ChatSkeleton />
-        ) : messages.length === 0 && !isTyping ? (
-          <NoMessagesEmptyState />
         ) : (
           <>
             {/* Load More Button */}

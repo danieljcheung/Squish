@@ -854,14 +854,16 @@ export default function CreateAgentScreen() {
       }
 
       showSuccess(`${finalName} has been created!`);
+
       // Reset navigation stack: Home as root, then Chat on top
       // This ensures back from chat goes to home, not onboarding
+      // Pass slime color and type to avoid flash of wrong slime during load
       navigation.dispatch(
         CommonActions.reset({
           index: 1,
           routes: [
             { name: 'index' },
-            { name: 'chat/[id]', params: { id: data.id } },
+            { name: 'chat/[id]', params: { id: data.id, slimeColor: selectedColor, slimeType: agentTypeId } },
           ],
         })
       );

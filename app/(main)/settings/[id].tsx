@@ -25,7 +25,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { BaseSlime, CoachSlime, Slime, ProfileSlime, SlimeColor, SlimeType } from '@/components/slime';
 import { AgentSettings, PersonaJson, DEFAULT_WATER_GOAL_ML, WATER_GLASS_ML } from '@/types';
 
-// Coaching style options
+// Coaching style options (Fitness)
 const COACHING_STYLES = [
   {
     id: 'tough_love',
@@ -44,6 +44,28 @@ const COACHING_STYLES = [
     label: 'Balanced',
     emoji: '⚖️',
     description: 'Supportive but honest',
+  },
+];
+
+// Finance personality options
+const FINANCE_STYLES = [
+  {
+    id: 'strict',
+    label: 'Strict',
+    emoji: '🎯',
+    description: 'Keep me accountable, call out overspending',
+  },
+  {
+    id: 'balanced',
+    label: 'Balanced',
+    emoji: '⚖️',
+    description: 'Friendly reminders, celebrate wins',
+  },
+  {
+    id: 'relaxed',
+    label: 'Relaxed',
+    emoji: '😌',
+    description: 'Just track, no judgment',
   },
 ];
 
@@ -441,19 +463,19 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionHeader, { color: themeColors.textMuted }]}>PERSONALITY</Text>
         <View style={[styles.card, { backgroundColor: themeColors.surface }]}>
           <View style={styles.styleSelector}>
-            {COACHING_STYLES.map((coachStyle) => (
+            {(isFinanceAgent ? FINANCE_STYLES : COACHING_STYLES).map((personalityStyle) => (
               <Pressable
-                key={coachStyle.id}
+                key={personalityStyle.id}
                 style={[
                   styles.styleOption,
                   { backgroundColor: themeColors.background },
-                  style === coachStyle.id && { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}15` },
+                  style === personalityStyle.id && { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}15` },
                 ]}
-                onPress={() => setStyle(coachStyle.id)}
+                onPress={() => setStyle(personalityStyle.id)}
               >
-                <Text style={styles.styleEmoji}>{coachStyle.emoji}</Text>
-                <Text style={[styles.styleLabel, { color: themeColors.text }]}>{coachStyle.label}</Text>
-                <Text style={[styles.styleDescription, { color: themeColors.textMuted }]}>{coachStyle.description}</Text>
+                <Text style={styles.styleEmoji}>{personalityStyle.emoji}</Text>
+                <Text style={[styles.styleLabel, { color: themeColors.text }]}>{personalityStyle.label}</Text>
+                <Text style={[styles.styleDescription, { color: themeColors.textMuted }]}>{personalityStyle.description}</Text>
               </Pressable>
             ))}
           </View>
