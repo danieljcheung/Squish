@@ -201,10 +201,14 @@ export function useSharedInsights(agent: Agent | null) {
       }
     });
 
-    return `
-Recent updates from other agents (use naturally when relevant, don't force it):
+    const result = `
+## Cross-Agent Insights
+You are part of a team of agents helping this user. Here's what your teammate agents have shared:
 ${formattedInsights.join('\n')}
+
+IMPORTANT: Acknowledge these insights when greeting or checking in with the user. For example, if the fitness agent logged a workout, say something like "I see you crushed a workout earlier - nice work staying active!" This makes the user feel like their agents are connected and aware of their progress across different areas of life.
 `.trim();
+    return result;
   }, []);
 
   return {
