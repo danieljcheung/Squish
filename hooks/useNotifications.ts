@@ -55,8 +55,10 @@ export function useNotifications(userId: string | undefined) {
       const data = response.notification.request.content.data as NotificationData;
       console.log('Notification tapped:', data);
 
-      // Navigate to chat if agentId is provided
-      if (data?.agentId) {
+      // Navigate based on notification type
+      if (data?.type === 'combined_weekly_summary') {
+        router.push('/combined-summary');
+      } else if (data?.agentId) {
         router.push(`/chat/${data.agentId}`);
       }
     });

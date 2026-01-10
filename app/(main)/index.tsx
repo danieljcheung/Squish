@@ -23,6 +23,8 @@ import { useTheme } from '@/context/ThemeContext';
 import { useAgents, AgentWithLastMessage } from '@/hooks/useAgent';
 import { useToast } from '@/context/ToastContext';
 import { Slime, ProfileSlime, InteractiveSlime, SlimeColor, SlimeType } from '@/components/slime';
+import { CombinedSummaryPreviewCard } from '@/components/home/CombinedSummaryPreviewCard';
+import { useCombinedWeeklySummary } from '@/hooks/useCombinedWeeklySummary';
 
 
 // Helper to format relative time
@@ -398,18 +400,32 @@ export default function HomeScreen() {
   const { colors: themeColors } = useTheme();
   const { agents, loading, error, refetch } = useAgents();
   const { showError } = useToast();
+  const {
+    summary: combinedSummary,
+    fetchRecentSummary,
+    dismiss: dismissCombinedSummary,
+    shouldShowHomeCard,
+  } = useCombinedWeeklySummary();
+
   useEffect(() => {
     if (error && !loading) {
       showError(error, refetch);
     }
   }, [error, loading]);
 
+  // Fetch combined summary when agents are loaded (need 2+ agents)
+  useEffect(() => {
+    if (agents.length >= 2) {
+      fetchRecentSummary();
+    }
+  }, [agents.length, fetchRecentSummary]);
+
   const [refreshing, setRefreshing] = useState(false);
   const [isSlimeGestureActive, setIsSlimeGestureActive] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refetch();
+    await Promise.all([refetch(), agents.length >= 2 ? fetchRecentSummary() : Promise.resolve()]);
     setRefreshing(false);
   };
 
@@ -473,6 +489,16 @@ export default function HomeScreen() {
             onGestureStart={handleSlimeGestureStart}
             onGestureEnd={handleSlimeGestureEnd}
           />
+        )}
+
+        {/* Combined Weekly Summary Card */}
+        {shouldShowHomeCard && combinedSummary && (
+          <View style={styles.combinedSummaryContainer}>
+            <CombinedSummaryPreviewCard
+              summary={combinedSummary}
+              onDismiss={dismissCombinedSummary}
+            />
+          </View>
         )}
 
         {/* Your Squad Section */}
@@ -661,6 +687,10 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     color: colors.textMuted,
     marginTop: 4,
+  },
+  // Combined Summary
+  combinedSummaryContainer: {
+    marginTop: spacing.lg,
   },
   // Squad Section
   squadSection: {

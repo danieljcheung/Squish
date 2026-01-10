@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as Linking from 'expo-linking';
-import { DailyGoalStatus, TrendDirection } from '@/types';
+import { DailyGoalStatus, TrendDirection, CombinedWeeklySummary, CombinedWeeklySummaryInsert } from '@/types';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -1705,4 +1705,78 @@ export const deleteAgentInsights = async (agentId: string) => {
     .delete()
     .eq('source_agent_id', agentId);
   return { error };
+};
+
+// ============================================
+// COMBINED WEEKLY SUMMARY
+// ============================================
+
+// Get combined summary for a specific week
+export const getCombinedWeeklySummary = async (userId: string, weekStart: string) => {
+  const { data, error } = await supabase
+    .from('combined_weekly_summaries')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('week_start', weekStart)
+    .single();
+  return { data: data as CombinedWeeklySummary | null, error };
+};
+
+// Get most recent non-dismissed summary (for home screen card)
+export const getRecentCombinedSummary = async (userId: string) => {
+  // Get summary if within 7 days of creation and not dismissed
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const { data, error } = await supabase
+    .from('combined_weekly_summaries')
+    .select('*')
+    .eq('user_id', userId)
+    .is('dismissed_at', null)
+    .gte('created_at', sevenDaysAgo.toISOString())
+    .order('week_start', { ascending: false })
+    .limit(1)
+    .single();
+  return { data: data as CombinedWeeklySummary | null, error };
+};
+
+// Mark summary as viewed
+export const markCombinedSummaryViewed = async (summaryId: string) => {
+  const { data, error } = await supabase
+    .from('combined_weekly_summaries')
+    .update({ viewed: true, updated_at: new Date().toISOString() })
+    .eq('id', summaryId)
+    .select()
+    .single();
+  return { data: data as CombinedWeeklySummary | null, error };
+};
+
+// Dismiss summary (hide from home screen)
+export const dismissCombinedSummary = async (summaryId: string) => {
+  const { data, error } = await supabase
+    .from('combined_weekly_summaries')
+    .update({
+      dismissed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', summaryId)
+    .select()
+    .single();
+  return { data: data as CombinedWeeklySummary | null, error };
+};
+
+// Create or update combined summary (upsert on user_id + week_start)
+export const upsertCombinedWeeklySummary = async (summary: CombinedWeeklySummaryInsert) => {
+  const { data, error } = await supabase
+    .from('combined_weekly_summaries')
+    .upsert(
+      {
+        ...summary,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,week_start' }
+    )
+    .select()
+    .single();
+  return { data: data as CombinedWeeklySummary | null, error };
 };

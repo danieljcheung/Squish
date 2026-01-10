@@ -320,3 +320,53 @@ export interface SharedInsightInsert {
   insight_data: Record<string, unknown>;
   expires_at: string;
 }
+
+// ============================================
+// COMBINED WEEKLY SUMMARY TYPES
+// ============================================
+
+export interface FitnessSummaryData {
+  totalWorkouts: number;
+  workoutMins: number;
+  streak: number;
+  calorieGoalDays: number;
+  waterGoalDays: number;
+  avgCalories: number;
+  highlights: string[];
+  hasActivity: boolean;
+}
+
+export interface FinanceSummaryData {
+  totalSpent: number;
+  budgetStatus: 'under' | 'over' | 'at';
+  budgetDifference: number; // positive = under, negative = over
+  savingsProgress: number; // percentage
+  topCategory: { name: string; icon: string; amount: number } | null;
+  daysUnderBudget: number;
+  hasActivity: boolean;
+}
+
+export interface CombinedWeeklySummary {
+  id: string;
+  user_id: string;
+  week_start: string;
+  week_end: string;
+  fitness_summary: FitnessSummaryData | null;
+  finance_summary: FinanceSummaryData | null;
+  team_wins: string[];
+  insight: string | null;
+  viewed: boolean;
+  dismissed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CombinedWeeklySummaryInsert {
+  user_id: string;
+  week_start: string;
+  week_end: string;
+  fitness_summary?: FitnessSummaryData | null;
+  finance_summary?: FinanceSummaryData | null;
+  team_wins?: string[];
+  insight?: string | null;
+}
