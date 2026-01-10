@@ -277,10 +277,9 @@ Deno.serve(async (req) => {
 
       // Check timezone - use fitness agent's timezone as primary
       const timezone = fitnessAgent.settings_json?.timezone || 'UTC';
-      // TESTING: Skip Sunday 7pm check - remove this for production
-      // if (!isSunday7pm(timezone, currentTime)) {
-      //   continue;
-      // }
+      if (!isSunday7pm(timezone, currentTime)) {
+        continue;
+      }
 
       console.log(`Processing user ${userId} (timezone: ${timezone})`);
 
