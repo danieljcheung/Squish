@@ -40,8 +40,11 @@ const FLICK_VELOCITY_SCALE = 0.75;
 const IMPACT_SQUISH_DURATION = 120;
 const IMPACT_RECOVERY_DURATION = 320;
 
-// Collision threshold (distance at which slimes bounce)
-const COLLISION_THRESHOLD = 85;
+// Collision radius for each slime (treat as circles)
+// Using ~75% of slime width as collision diameter
+const SLIME_RADIUS = SLIME_WIDTH * 0.45;
+// Minimum distance = sum of both radii
+const MIN_DISTANCE = SLIME_RADIUS * 2;
 
 interface DualInteractiveSlimeProps {
   fitnessAgent: Agent;
@@ -661,53 +664,89 @@ export default function DualInteractiveSlime({
     }
 
     // ============================================
-    // COLLISION DETECTION BETWEEN SLIMES
+    // COLLISION DETECTION BETWEEN SLIMES (EVERY FRAME)
     // ============================================
+    // Calculate distance between slime centers
     const dx = body2X.value - body1X.value;
     const dy = body2Y.value - body1Y.value;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist < COLLISION_THRESHOLD && dist > 0) {
+    // Check if slimes are overlapping (treat as circles)
+    if (dist < MIN_DISTANCE && dist > 0.001) {
+      // Normalize collision direction
       const nx = dx / dist;
       const ny = dy / dist;
-      const overlap = COLLISION_THRESHOLD - dist;
 
-      // Push apart immediately (no overlap allowed)
-      if (!slime1IsDragging.value) {
-        body1X.value -= nx * overlap * 0.5;
-        body1Y.value -= ny * overlap * 0.5;
-        grab1X.value -= nx * overlap * 0.5;
-        grab1Y.value -= ny * overlap * 0.5;
+      // Calculate overlap amount
+      const overlap = MIN_DISTANCE - dist;
+
+      // STEP 1: SEPARATE SLIMES IMMEDIATELY (no visual overlap ever)
+      // If one is dragging, push the other one entirely
+      // If both are free, split the separation 50/50
+      const slime1Dragging = slime1IsDragging.value;
+      const slime2Dragging = slime2IsDragging.value;
+
+      if (slime1Dragging && !slime2Dragging) {
+        // Slime 1 is being dragged - push slime 2 away entirely
+        body2X.value += nx * overlap;
+        body2Y.value += ny * overlap;
+        grab2X.value += nx * overlap;
+        grab2Y.value += ny * overlap;
+      } else if (slime2Dragging && !slime1Dragging) {
+        // Slime 2 is being dragged - push slime 1 away entirely
+        body1X.value -= nx * overlap;
+        body1Y.value -= ny * overlap;
+        grab1X.value -= nx * overlap;
+        grab1Y.value -= ny * overlap;
+      } else if (!slime1Dragging && !slime2Dragging) {
+        // Neither is dragging - split the separation
+        const halfOverlap = overlap * 0.5;
+        body1X.value -= nx * halfOverlap;
+        body1Y.value -= ny * halfOverlap;
+        grab1X.value -= nx * halfOverlap;
+        grab1Y.value -= ny * halfOverlap;
+        body2X.value += nx * halfOverlap;
+        body2Y.value += ny * halfOverlap;
+        grab2X.value += nx * halfOverlap;
+        grab2Y.value += ny * halfOverlap;
       }
-      if (!slime2IsDragging.value) {
-        body2X.value += nx * overlap * 0.5;
-        body2Y.value += ny * overlap * 0.5;
-        grab2X.value += nx * overlap * 0.5;
-        grab2Y.value += ny * overlap * 0.5;
+      // If both are dragging, don't separate (let user control)
+
+      // STEP 2: APPLY SQUISH DEFORMATION (always on contact)
+      // Use overlap amount to determine squish intensity (more overlap = more squish)
+      const overlapIntensity = Math.min(1, overlap / 20);
+      if (Math.abs(nx) > Math.abs(ny)) {
+        // Horizontal collision - squish horizontally
+        slime1ImpactX.value = nx * overlapIntensity * 0.5;
+        slime2ImpactX.value = -nx * overlapIntensity * 0.5;
+      } else {
+        // Vertical collision - squish vertically
+        slime1ImpactY.value = ny * overlapIntensity * 0.5;
+        slime2ImpactY.value = -ny * overlapIntensity * 0.5;
       }
 
-      // Calculate relative velocity
+      // STEP 3: APPLY BOUNCE VELOCITY (only if approaching with speed)
       const relVelX = slime2VelX.value - slime1VelX.value;
       const relVelY = slime2VelY.value - slime1VelY.value;
       const relVelDot = relVelX * nx + relVelY * ny;
 
-      // Only respond if slimes are approaching
-      if (relVelDot < 0) {
+      if (relVelDot < -10) {
+        // Slimes approaching with velocity - apply bounce
         const impulse = relVelDot * (1 + BOUNCE_DAMPING);
 
-        if (!slime1IsDragging.value) {
+        if (!slime1Dragging) {
           slime1VelX.value += impulse * nx * 0.5;
           slime1VelY.value += impulse * ny * 0.5;
           slime1IsFlicking.value = true;
         }
-        if (!slime2IsDragging.value) {
+        if (!slime2Dragging) {
           slime2VelX.value -= impulse * nx * 0.5;
           slime2VelY.value -= impulse * ny * 0.5;
           slime2IsFlicking.value = true;
         }
 
-        // Impact squish on collision
-        const impactIntensity = Math.min(1, Math.abs(relVelDot) / 300);
+        // Apply bounce squish animation
+        const impactIntensity = Math.min(1, Math.abs(relVelDot) / 200);
         if (Math.abs(nx) > Math.abs(ny)) {
           slime1ImpactX.value = withSequence(
             withTiming(nx * impactIntensity, { duration: IMPACT_SQUISH_DURATION, easing: Easing.out(Easing.quad) }),
@@ -728,7 +767,7 @@ export default function DualInteractiveSlime({
           );
         }
 
-        // Wobble on collision
+        // STEP 4: APPLY WOBBLE ANIMATION
         const collisionSpeed = Math.abs(relVelDot);
         wobble1Scale.value = withSequence(
           withTiming(1 - Math.min(0.12, collisionSpeed / 600), { duration: 60 }),
@@ -740,6 +779,17 @@ export default function DualInteractiveSlime({
           withTiming(1 + Math.min(0.04, collisionSpeed / 2000), { duration: 150, easing: Easing.out(Easing.quad) }),
           withSpring(1, { damping: 15, stiffness: 80 })
         );
+      }
+    } else {
+      // No collision - reset squish values if not animating
+      // This ensures squish goes away when slimes separate
+      if (Math.abs(slime1ImpactX.value) < 0.1 && Math.abs(slime1ImpactY.value) < 0.1) {
+        slime1ImpactX.value = 0;
+        slime1ImpactY.value = 0;
+      }
+      if (Math.abs(slime2ImpactX.value) < 0.1 && Math.abs(slime2ImpactY.value) < 0.1) {
+        slime2ImpactX.value = 0;
+        slime2ImpactY.value = 0;
       }
     }
   });
@@ -1364,7 +1414,16 @@ export default function DualInteractiveSlime({
             <View style={styles.mouth} />
           </Animated.View>
           {/* Name badge - attached to slime body */}
-          <View style={styles.nameBadge} pointerEvents="none">
+          <View
+            style={[
+              styles.nameBadge,
+              {
+                backgroundColor: themeColors.surface,
+                borderColor: themeColors.textMuted,
+              }
+            ]}
+            pointerEvents="none"
+          >
             <Text style={[styles.nameBadgeText, { color: themeColors.text }]}>{fitnessName}</Text>
           </View>
         </Animated.View>
@@ -1394,7 +1453,16 @@ export default function DualInteractiveSlime({
             </View>
           </Animated.View>
           {/* Name badge - attached to slime body */}
-          <View style={styles.nameBadge} pointerEvents="none">
+          <View
+            style={[
+              styles.nameBadge,
+              {
+                backgroundColor: themeColors.surface,
+                borderColor: themeColors.textMuted,
+              }
+            ]}
+            pointerEvents="none"
+          >
             <Text style={[styles.nameBadgeText, { color: themeColors.text }]}>{financeName}</Text>
           </View>
         </Animated.View>
@@ -1486,13 +1554,9 @@ const styles = StyleSheet.create({
     bottom: -4,
     paddingHorizontal: 8,
     paddingVertical: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 1,
+    // backgroundColor and borderColor are set dynamically via themeColors
   },
   nameBadgeText: {
     fontSize: 10,
