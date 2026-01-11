@@ -146,6 +146,9 @@ export default function DualInteractiveSlime({
   const slime1Morph = useSharedValue(0);
   const slime1Squish = useSharedValue(0);
   const slime1Blink = useSharedValue(0);
+  // Gesture start position (captured when drag begins)
+  const slime1StartX = useSharedValue(homeX1);
+  const slime1StartY = useSharedValue(homeY);
 
   // ============================================
   // SLIME 2 (FINANCE) STATE
@@ -188,6 +191,9 @@ export default function DualInteractiveSlime({
   const slime2Morph = useSharedValue(0);
   const slime2Squish = useSharedValue(0);
   const slime2Blink = useSharedValue(0);
+  // Gesture start position (captured when drag begins)
+  const slime2StartX = useSharedValue(homeX2);
+  const slime2StartY = useSharedValue(homeY);
 
   // Start idle animations
   useEffect(() => {
@@ -827,6 +833,10 @@ export default function DualInteractiveSlime({
       cancelAnimation(slime1ImpactX);
       cancelAnimation(slime1ImpactY);
 
+      // Capture current position as gesture start (for correct wall boundaries)
+      slime1StartX.value = body1X.value;
+      slime1StartY.value = body1Y.value;
+
       // Reset flick-related values
       slime1VelX.value = 0;
       slime1VelY.value = 0;
@@ -840,9 +850,9 @@ export default function DualInteractiveSlime({
       wobble1SkewY.value = 0;
     })
     .onUpdate((event: GestureUpdateEvent<PanGestureHandlerEventPayload>) => {
-      // Calculate target position from home + translation
-      const clampedX = Math.max(bounds.minX, Math.min(bounds.maxX, homeX1 + event.translationX));
-      const clampedY = Math.max(bounds.minY, Math.min(bounds.maxY, event.translationY));
+      // Calculate target position from captured start + translation (symmetric boundaries)
+      const clampedX = Math.max(bounds.minX, Math.min(bounds.maxX, slime1StartX.value + event.translationX));
+      const clampedY = Math.max(bounds.minY, Math.min(bounds.maxY, slime1StartY.value + event.translationY));
 
       // Grab point follows finger IMMEDIATELY
       grab1X.value = clampedX;
@@ -966,6 +976,10 @@ export default function DualInteractiveSlime({
       cancelAnimation(slime2ImpactX);
       cancelAnimation(slime2ImpactY);
 
+      // Capture current position as gesture start (for correct wall boundaries)
+      slime2StartX.value = body2X.value;
+      slime2StartY.value = body2Y.value;
+
       // Reset flick-related values
       slime2VelX.value = 0;
       slime2VelY.value = 0;
@@ -979,9 +993,9 @@ export default function DualInteractiveSlime({
       wobble2SkewY.value = 0;
     })
     .onUpdate((event: GestureUpdateEvent<PanGestureHandlerEventPayload>) => {
-      // Calculate target position from home + translation
-      const clampedX = Math.max(bounds.minX, Math.min(bounds.maxX, homeX2 + event.translationX));
-      const clampedY = Math.max(bounds.minY, Math.min(bounds.maxY, event.translationY));
+      // Calculate target position from captured start + translation (symmetric boundaries)
+      const clampedX = Math.max(bounds.minX, Math.min(bounds.maxX, slime2StartX.value + event.translationX));
+      const clampedY = Math.max(bounds.minY, Math.min(bounds.maxY, slime2StartY.value + event.translationY));
 
       // Grab point follows finger IMMEDIATELY
       grab2X.value = clampedX;
