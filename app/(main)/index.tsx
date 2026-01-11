@@ -506,7 +506,7 @@ export default function HomeScreen() {
           <View style={styles.squadSection}>
             <View style={styles.squadHeader}>
               <Text style={[styles.squadTitle, { color: themeColors.text }]}>Your Squad</Text>
-              <Pressable onPress={() => router.push('/agent-lounge')}>
+              <Pressable onPress={() => router.push('/squish-lounge')}>
                 <Text style={[styles.viewAllText, { color: themeColors.textMuted }]}>View All</Text>
               </Pressable>
             </View>

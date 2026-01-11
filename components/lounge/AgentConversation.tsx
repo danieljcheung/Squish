@@ -40,7 +40,7 @@ export function AgentConversation({
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={themeColors.primary} />
         <Text style={[styles.loadingText, { color: themeColors.textMuted }]}>
-          Agents are catching up...
+          Squishes are catching up...
         </Text>
       </View>
     );
@@ -71,7 +71,15 @@ export function AgentConversation({
       {messages.length === 0 && !loading && (
         <View style={styles.emptyContainer}>
           <Text style={[styles.emptyText, { color: themeColors.textMuted }]}>
-            Your agents haven't chatted yet. Pull to refresh!
+            Your Squishes haven't chatted yet. Pull to refresh!
+          </Text>
+        </View>
+      )}
+
+      {messages.length > 0 && (
+        <View style={styles.footerContainer}>
+          <Text style={[styles.footerText, { color: themeColors.textMuted }]}>
+            This is what your Squishes chat about behind the scenes!
           </Text>
         </View>
       )}
@@ -109,5 +117,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: fonts.regular,
     textAlign: 'center',
+  },
+  footerContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

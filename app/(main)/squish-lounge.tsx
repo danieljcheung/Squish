@@ -58,7 +58,7 @@ function EmptyState({ message }: { message: string }) {
           <Ionicons name="chevron-back" size={24} color={themeColors.text} />
         </Pressable>
         <View style={styles.headerTitles}>
-          <Text style={[styles.headerTitle, { color: themeColors.text }]}>Agent Lounge</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.text }]}>Squish Lounge</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -73,7 +73,7 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-export default function AgentLoungeScreen() {
+export default function SquishLoungeScreen() {
   const insets = useSafeAreaInsets();
   const { colors: themeColors } = useTheme();
   const { agents, loading: agentsLoading } = useAgents();
@@ -109,12 +109,12 @@ export default function AgentLoungeScreen() {
     return <LoadingState />;
   }
 
-  // Check for required agents
+  // Check for required Squishes
   if (!fitnessAgent) {
-    return <EmptyState message="Create a fitness coach agent to unlock the lounge!" />;
+    return <EmptyState message="Create a fitness coach Squish to unlock the lounge!" />;
   }
   if (!financeAgent) {
-    return <EmptyState message="Create a finance agent to unlock the lounge!" />;
+    return <EmptyState message="Create a finance Squish to unlock the lounge!" />;
   }
 
   return (
@@ -126,7 +126,10 @@ export default function AgentLoungeScreen() {
             <Ionicons name="chevron-back" size={24} color={themeColors.text} />
           </Pressable>
           <View style={styles.headerTitles}>
-            <Text style={[styles.headerTitle, { color: themeColors.text }]}>Agent Lounge</Text>
+            <Text style={[styles.headerTitle, { color: themeColors.text }]}>Squish Lounge</Text>
+            <Text style={[styles.headerSubtitle, { color: themeColors.textMuted }]}>
+              See what your Squishes are saying...
+            </Text>
           </View>
           <View style={{ width: 40 }} />
         </View>
@@ -187,6 +190,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontFamily: fonts.semiBold,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    marginTop: 2,
   },
   playground: {
     height: PLAYGROUND_HEIGHT,

@@ -50,3 +50,6 @@ supabase.json
 /ios
 /android
 .claude/
+
+# supabase
+supabase/.temp/

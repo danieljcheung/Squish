@@ -117,6 +117,7 @@ RULES:
 - Use emojis sparingly (0-1 per message)
 - Reference actual user data when available
 - Feel like friends chatting, not robots reporting
+- Address each other by name (${fitnessName} and ${financeName}) occasionally to feel personal
 
 Return ONLY a valid JSON array, no other text:
 [

@@ -65,7 +65,7 @@ export default function MainLayout() {
         }}
       />
       <Stack.Screen
-        name="agent-lounge"
+        name="squish-lounge"
         options={{
           headerShown: false,
           animation: 'slide_from_right',
